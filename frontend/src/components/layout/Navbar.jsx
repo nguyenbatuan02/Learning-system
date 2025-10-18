@@ -77,50 +77,7 @@ const Navbar = () => {
           <div className="hidden md:flex items-center space-x-3">
             {user ? (
               <>
-                {/* Notifications */}
-                <div className="relative">
-                  <button 
-                    onClick={() => setNotificationOpen(!notificationOpen)}
-                    className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors relative"
-                  >
-                    <Bell className="h-5 w-5" />
-                    <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full"></span>
-                  </button>
-
-                  {/* Notification Dropdown */}
-                  {notificationOpen && (
-                    <div className="absolute right-0 mt-2 w-80 bg-white rounded-lg shadow-lg border border-gray-200 py-2">
-                      <div className="px-4 py-2 border-b">
-                        <h3 className="font-semibold text-gray-900">Thông báo</h3>
-                      </div>
-                      <div className="max-h-96 overflow-y-auto">
-                        <div className="px-4 py-3 hover:bg-gray-50 cursor-pointer">
-                          <p className="text-sm text-gray-900 font-medium">
-                            Bài thi mới: Toán - Giải tích
-                          </p>
-                          <p className="text-xs text-gray-500 mt-1">2 giờ trước</p>
-                        </div>
-                        <div className="px-4 py-3 hover:bg-gray-50 cursor-pointer">
-                          <p className="text-sm text-gray-900 font-medium">
-                            Bạn đã hoàn thành bài ôn luyện
-                          </p>
-                          <p className="text-xs text-gray-500 mt-1">5 giờ trước</p>
-                        </div>
-                        <div className="px-4 py-3 hover:bg-gray-50 cursor-pointer">
-                          <p className="text-sm text-gray-900 font-medium">
-                            Điểm của bạn đã tăng 10%
-                          </p>
-                          <p className="text-xs text-gray-500 mt-1">Hôm qua</p>
-                        </div>
-                      </div>
-                      <div className="px-4 py-2 border-t">
-                        <button className="text-sm text-blue-600 hover:text-blue-700 font-medium">
-                          Xem tất cả
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
+                
 
                 {/* User Menu */}
                 <Link

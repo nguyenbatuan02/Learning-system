@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect } from 'react'
 import { supabase } from '../lib/supabaseClient'
 import axios from 'axios'
+import api from '../lib/api'
 
 const AuthContext = createContext({})
 
@@ -10,26 +11,32 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
   const [session, setSession] = useState(null)
-
+  const loadUserProfile = async () => {
+    try {
+      await new Promise(resolve => setTimeout(resolve, 300))
+      const { data } = await api.get('/api/v1/users/me')
+      setUser(data)
+    } catch (error) {
+      console.error('Failed to load user profile', error)
+      }
+  }
 
   useEffect(() => {
     // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    const initAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession()
       setSession(session)
-      if (session?.user) {
-        setUser({
-          id: session.user.id,
-          email: session.user.email,
-          full_name: session.user.user_metadata?.full_name || '',
-          role: session.user.user_metadata?.role || 'user',
-          avatar_url: session.user.user_metadata?.avatar_url || null,
-          created_at: session.user.created_at
-        })
+      
+      if (session) {
+        await loadUserProfile()
       } else {
         setUser(null)
       }
+      
       setLoading(false)
-    })
+    }
+
+    initAuth()
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(

@@ -11,6 +11,8 @@ import ProtectedRoute from './components/layout/ProtectedRoute';
 // Auth Pages
 import Login from './pages/auth/Login';
 import Register from './pages/auth/Register';
+import ForgotPassword from './pages/auth/ForgotPassword';
+import ResetPassword from './pages/auth/ResetPassword';
 
 // User Pages
 import Home from './pages/Home';
@@ -37,6 +39,8 @@ function App() {
           {/* Auth Routes */}
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
+          <Route path="/forgot-password" element={<ForgotPassword />} />  
+          <Route path="/reset-password" element={<ResetPassword />} />  
 
           {/* User Routes */}
           <Route element={<MainLayout />}>

@@ -1,4 +1,5 @@
 import api from '../lib/api';
+import { supabase } from '../lib/supabaseClient';
 
 export const authService = {
   // Register
@@ -46,6 +47,35 @@ export const authService = {
      });
      return response;
    }
+
+   // Forgot password
+   ,
+   forgotPassword: async (email) => {
+     const { data } = await api.post('/api/v1/auth/forgot-password', {
+       email,
+     });
+     return data;
+   },
+
+   // Reset password
+   resetPassword: async (newPassword) => {
+  // Lấy session từ Supabase
+  const { data: { session } } = await supabase.auth.getSession();
+  
+  if (!session) {
+    throw new Error('Session không hợp lệ');
+  }
+  
+  const { data } = await api.post('/api/v1/auth/reset-password', {
+    new_password: newPassword,
+  }, {
+    headers: {
+      'Authorization': `Bearer ${session.access_token}`
+    }
+  });
+  
+  return data;
+},
 };
 
  

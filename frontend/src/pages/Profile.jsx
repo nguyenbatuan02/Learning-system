@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { supabase } from '../lib/supabaseClient';
 import { 
   User,
   Mail,
@@ -106,6 +107,17 @@ const Profile = () => {
         full_name: editForm.full_name,
       });
 
+      const { data: authData, error: authError } = await supabase.auth.updateUser({
+      data: {
+        full_name: editForm.full_name
+      }
+    })
+    
+    if (authError) {
+      console.error('❌ [3] Auth update error:', authError)
+      throw authError
+    }
+
       updateUser(updatedUser);
       toast.success('Cập nhật thông tin thành công!');
       setShowEditModal(false);
@@ -196,23 +208,8 @@ const Profile = () => {
             </div>
           </div>
 
-          {/* Actions */}
-          <div className="flex space-x-3">
-            <Button
-              variant="outline"
-              icon={Edit}
-              onClick={() => setShowEditModal(true)}
-            >
-              Chỉnh sửa
-            </Button>
-            <Button
-              variant="outline"
-              icon={LogOut}
-              onClick={handleLogout}
-            >
-              Đăng xuất
-            </Button>
-          </div>
+    
+
         </div>
       </div>
 

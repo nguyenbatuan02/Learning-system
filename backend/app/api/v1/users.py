@@ -9,7 +9,6 @@ router = APIRouter()
 @router.get("/me", response_model=UserResponse)
 async def get_current_user_profile(
     current_user: dict = Depends(get_current_user)
-    
 ):
     """
     Lấy thông tin user hiện tại
@@ -20,7 +19,8 @@ async def get_current_user_profile(
 async def update_profile(
     profile_data: ProfileUpdate,
     current_user: dict = Depends(get_current_user),
-    supabase: Client = Depends(get_supabase)
+    supabase: Client = Depends(get_supabase),
+    supabase_admin: Client = Depends(get_supabase_admin)
 ):
     """
     Cập nhật profile
@@ -53,34 +53,31 @@ async def change_password(
     Đổi mật khẩu
     """
     try:
-        # Xác thực mật khẩu hiện tại
-        auth_response = supabase.auth.sign_in_with_password({
-            "email": current_user["email"],
-            "password": password_data.current_password
-        })
-        
-        if not auth_response.user:
+        try:
+            supabase.auth.sign_in_with_password({
+                "email": current_user["email"],
+                "password": password_data.current_password
+            })
+        except Exception:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Current password is incorrect"
+                detail="Mật khẩu hiện tại không đúng"
             )
         
-        # Đổi mật khẩu sử dụng Supabase Admin
-        update_response = supabase_admin.auth.admin.update_user_by_id(
+        # Update password
+        supabase.auth.admin.update_user_by_id(
             current_user["id"],
             {"password": password_data.new_password}
         )
         
-        if not update_response.user:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Failed to change password"
-            )
+        return {"message": "Đổi mật khẩu thành công"}
         
-        return {"detail": "Password changed successfully"}
-        
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Password change failed: {str(e)}"
+            detail=str(e)
         )
+
+

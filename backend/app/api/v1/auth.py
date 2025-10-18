@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Header
 from supabase import Client
 from app.core.supabase import get_supabase
-from app.models.user import UserRegister, UserLogin, AuthResponse, UserResponse
-from typing import Dict
+from app.models.user import UserRegister, UserLogin, AuthResponse, UserResponse, ForgotPasswordRequest, ResetPasswordRequest
+from typing import Dict, Optional
+import os
 
 router = APIRouter()
 
@@ -116,4 +117,84 @@ async def refresh_token(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid refresh token"
+        )
+
+@router.post("/forgot-password")
+async def forgot_password(
+    request: ForgotPasswordRequest,
+    supabase: Client = Depends(get_supabase)
+):
+    """
+    Gửi email reset password
+    """
+    try:
+        
+        # Gửi email reset password
+        response = supabase.auth.reset_password_for_email(
+            request.email,
+            options={
+                "redirect_to": f"{os.getenv('FRONTEND_URL', 'http://localhost:5173')}/reset-password"
+            }
+        )
+        
+        return {
+            "message": "Nếu email tồn tại, chúng tôi đã gửi link đặt lại mật khẩu"
+        }
+        
+    except Exception as e:
+        print(f"❌ Forgot password error: {str(e)}")
+        # Không show lỗi chi tiết cho security
+        return {
+            "message": "Nếu email tồn tại, chúng tôi đã gửi link đặt lại mật khẩu"
+        }
+
+@router.post("/reset-password")
+async def reset_password(
+    request: ResetPasswordRequest,
+    authorization: Optional[str] = Header(None),  # Lấy token từ header
+    supabase: Client = Depends(get_supabase)
+):
+    """
+    Reset password với token từ email
+    """
+    try:
+        # Lấy access token từ Authorization header
+        if not authorization or not authorization.startswith('Bearer '):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Missing or invalid authorization token"
+            )
+        
+        access_token = authorization.replace('Bearer ', '')
+        
+        # Set session với access token
+        supabase.auth.set_session(access_token, access_token) 
+        
+        # Validate password length
+        if len(request.new_password) < 6:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Mật khẩu phải có ít nhất 6 ký tự"
+            )
+        
+        # Update password
+        response = supabase.auth.update_user({
+            "password": request.new_password
+        })
+        
+        if not response.user:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid or expired reset token"
+            )
+        
+        return {"message": "Mật khẩu đã được đặt lại thành công"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"❌ Reset password error: {str(e)}")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Không thể đặt lại mật khẩu. Link có thể đã hết hạn."
         )

@@ -179,45 +179,6 @@ const Upload = () => {
             </label>
           </div>
 
-          {/* Recent Uploads */}
-          <div className="mt-8">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">
-              File đã tải lên gần đây
-            </h3>
-            <div className="space-y-2">
-              <div className="flex items-center justify-between p-3 border border-gray-200 rounded-lg">
-                <div className="flex items-center space-x-3">
-                  <File className="h-5 w-5 text-gray-400" />
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">toan_giaitich.pdf</p>
-                    <p className="text-xs text-gray-500">Đã xử lý • 2 giờ trước</p>
-                  </div>
-                </div>
-                <CheckCircle className="h-5 w-5 text-green-600" />
-              </div>
-              <div className="flex items-center justify-between p-3 border border-gray-200 rounded-lg">
-                <div className="flex items-center space-x-3">
-                  <File className="h-5 w-5 text-gray-400" />
-                  <div>
-                    <p className="text-sm font-medium text-gray-900">vatly_cohoc.jpg</p>
-                    <p className="text-xs text-gray-500">Đang xử lý • 10 phút trước</p>
-                  </div>
-                </div>
-                <Loader2 className="h-5 w-5 text-blue-600 animate-spin" />
-              </div>
-            </div>
-          </div>
-
-          {/* Tips */}
-          <div className="mt-8 bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <h4 className="font-semibold text-blue-900 mb-2">💡 Mẹo để OCR tốt hơn:</h4>
-            <ul className="text-sm text-blue-800 space-y-1">
-              <li>• Sử dụng ảnh rõ nét, ánh sáng tốt</li>
-              <li>• Chữ in (không viết tay) cho kết quả tốt nhất</li>
-              <li>• Giữ văn bản nằm ngang, không bị nghiêng</li>
-              <li>• File PDF hoặc Word cho độ chính xác cao nhất</li>
-            </ul>
-          </div>
         </Card>
       )}
 
