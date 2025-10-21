@@ -99,6 +99,83 @@ async def get_exam_detail(
     except Exception as e:
         logger.error(f"Get exam detail error: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+    
+@router.get("/{exam_id}/take")
+async def take_exam(
+    exam_id: str,
+    current_user: dict = Depends(get_current_user),
+    supabase: Client = Depends(get_supabase_admin)
+):
+    """
+    Endpoint cho học sinh làm bài thi
+    Trả về đề thi với câu hỏi (không có đáp án đúng)
+    """
+    try:
+        # Get exam
+        exam = supabase.table("exams")\
+            .select("*, question_banks(name, id)")\
+            .eq("id", exam_id)\
+            .execute()
+        
+        if not exam.data or len(exam.data) == 0:
+            raise HTTPException(status_code=404, detail="Exam not found")
+        
+        exam_data = exam.data[0]
+        #  Check if published
+        if not exam_data.get("is_published", False):
+            raise HTTPException(status_code=403, detail="Exam is not published yet")
+        
+        # Get questions (without correct answers and explanations)
+        exam_questions = supabase.table("exam_questions")\
+            .select("*, question_bank_items(*)")\
+            .eq("exam_id", exam_id)\
+            .order("order_index")\
+            .execute()
+        
+        # Remove correct answers and explanations from questions
+        questions = []
+        for eq in exam_questions.data:
+            q = eq["question_bank_items"].copy()
+            # Remove sensitive data
+            q.pop("correct_answer", None)
+            q.pop("explanation", None)
+            q.pop("times_correct", None)
+            q.pop("times_incorrect", None)
+            q.pop("times_used", None)
+            
+            questions.append({
+                **q,
+                "exam_question_id": eq["id"],
+                "order_index": eq["order_index"],
+                "marks": eq["marks"]
+            })
+            # Shuffle questions if enabled
+        if exam_data.get("shuffle_questions", False):
+            import random
+            random.shuffle(questions)
+            # Re-index after shuffle
+            for idx, q in enumerate(questions):
+                q["order_index"] = idx
+        
+        return {
+            "id": exam_data["id"],
+            "title": exam_data["title"],
+            "description": exam_data.get("description"),
+            "duration_minutes": exam_data["duration_minutes"],
+            "total_marks": exam_data["total_marks"],
+            "passing_marks": exam_data.get("passing_marks"),
+            "shuffle_options": exam_data.get("shuffle_options", False),
+            "is_published": exam_data["is_published"],
+            "questions": questions,
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Take exam error: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/create-from-bank")
 async def create_exam_from_question_bank(
@@ -382,25 +459,33 @@ async def delete_exam(
 ):
     """Xóa đề thi"""
     try:
-        # Check ownership
-        exam = supabase.table("exams")\
-            .select("created_by")\
+        exam_query = supabase.table("exams")\
+            .select("*")\
             .eq("id", exam_id)\
-            .single()\
             .execute()
         
-        if not exam.data or exam.data["created_by"] != current_user["id"]:
+        if not exam_query.data or len(exam_query.data) == 0:
+            raise HTTPException(status_code=404, detail="Exam not found")
+        
+        exam = exam_query.data[0]
+        if exam["created_by"] != current_user["id"]:
             raise HTTPException(status_code=403, detail="Access denied")
         
-        # Delete (cascade will handle exam_questions)
-        supabase.table("exams").delete().eq("id", exam_id).execute()
+
+        exam_delete = supabase.table("exams")\
+            .delete()\
+            .eq("id", exam_id)\
+            .execute()
         
-        return {"message": "Exam deleted successfully"}
         
-    except HTTPException:
+    except HTTPException as he:
         raise
     except Exception as e:
+        import traceback
+        print(traceback.format_exc())
         raise HTTPException(status_code=500, detail=str(e))
+        
+    
 
 @router.post("/{exam_id}/publish")
 async def publish_exam(

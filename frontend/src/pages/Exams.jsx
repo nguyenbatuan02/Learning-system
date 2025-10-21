@@ -137,7 +137,7 @@ const Exams = () => {
                   : 'text-gray-600 hover:text-gray-900'
               }`}
             >
-              Đã xuất bản
+              Bản chính
             </button>
             <button
               onClick={() => setFilterType('draft')}
@@ -147,7 +147,7 @@ const Exams = () => {
                   : 'text-gray-600 hover:text-gray-900'
               }`}
             >
-              Nháp
+              Bản nháp
             </button>
           </div>
         </div>
@@ -162,6 +162,7 @@ const Exams = () => {
               exam={exam}
               onView={() => navigate(`/exams/${exam.id}`)}
               onEdit={() => navigate(`/exams/${exam.id}/edit`)}
+              onTake={() => navigate(`/exam/${exam.id}/take`)}
               onDelete={() => {
                 setSelectedExam(exam);
                 setShowDeleteModal(true);
@@ -228,7 +229,7 @@ const Exams = () => {
 };
 
 // Exam Card Component
-const ExamCard = ({ exam, onView, onEdit, onDelete, onPublish }) => {
+const ExamCard = ({ exam, onView, onEdit, onDelete, onTake, onPublish }) => {
   const [showMenu, setShowMenu] = useState(false);
 
   return (
@@ -298,7 +299,7 @@ const ExamCard = ({ exam, onView, onEdit, onDelete, onPublish }) => {
                     className="w-full flex items-center space-x-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
                   >
                     <Share2 className="h-4 w-4" />
-                    <span>Xuất bản</span>
+                    <span>Bản chính</span>
                   </button>
                 )}
                 <hr className="my-1" />
@@ -342,7 +343,7 @@ const ExamCard = ({ exam, onView, onEdit, onDelete, onPublish }) => {
 
       {/* Status */}
       <Badge variant={exam.is_published ? 'success' : 'default'} size="sm">
-        {exam.is_published ? 'Đã xuất bản' : 'Nháp'}
+        {exam.is_published ? 'Bản chính' : 'Bản nháp'}
       </Badge>
 
       {/* Actions */}
@@ -355,15 +356,14 @@ const ExamCard = ({ exam, onView, onEdit, onDelete, onPublish }) => {
         >
           Xem chi tiết
         </Button>
-        {!exam.is_published && (
-          <Button
-            size="sm"
-            className="flex-1"
-            onClick={onPublish}
-          >
-            Xuất bản
-          </Button>
-        )}
+        <Button
+          variant="primary"
+          size="sm"
+          className="flex-1"
+          onClick={onTake}
+        >
+            Làm bài
+        </Button>
       </div>
     </Card>
   );

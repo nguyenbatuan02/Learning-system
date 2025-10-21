@@ -28,6 +28,8 @@ const ExamResult = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const userExamId = searchParams.get('userExamId');
+  console.log('🔍 ExamResult - examId:', examId);
+  console.log('🔍 ExamResult - userExamId:', userExamId);
 
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -115,9 +117,9 @@ const ExamResult = () => {
   }
 
   const score = result.score || 0;
-  const correctCount = result.answers.filter(a => a.is_correct).length;
-  const wrongCount = result.answers.filter(a => !a.is_correct).length;
-  const totalQuestions = result.answers.length;
+  const correctCount = result.questions.filter(a => a.is_correct).length;
+  const wrongCount = result.questions.filter(a => !a.is_correct).length;
+  const totalQuestions = result.questions.length;
   const isPassed = score >= (result.exam?.pass_percentage || 70);
 
   return (
@@ -219,22 +221,15 @@ const ExamResult = () => {
               <Button
                 variant="outline"
                 icon={Target}
-                onClick={() => navigate(`/exam/${examId}`)}
+                onClick={() => navigate(`/exam/${examId}/take`)}
               >
                 Làm lại
               </Button>
               <Button
-                variant="outline"
-                icon={Download}
-                onClick={() => toast.success('Tính năng xuất PDF sẽ sớm có!')}
-              >
-                Xuất PDF
-              </Button>
-              <Button
                 icon={Home}
-                onClick={() => navigate('/')}
+                onClick={() => navigate('/exams')}
               >
-                Về trang chủ
+                Về trang đề thi
               </Button>
             </div>
           </div>
@@ -300,25 +295,11 @@ const ExamResult = () => {
           <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-bold text-gray-900">📋 Chi tiết từng câu</h2>
             <div className="space-x-2">
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={expandAll}
-              >
-                Mở tất cả
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={collapseAll}
-              >
-                Thu gọn
-              </Button>
             </div>
           </div>
 
           <div className="space-y-4">
-            {result.answers.map((answer, index) => (
+            {result.questions.map((answer, index) => (
               <QuestionResultCard
                 key={answer.question_id}
                 answer={answer}
@@ -330,37 +311,6 @@ const ExamResult = () => {
           </div>
         </Card>
 
-        {/* Suggestions */}
-        {wrongCount > 0 && (
-          <Card className="mt-8 bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
-            <div className="flex items-start space-x-4">
-              <div className="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
-                <span className="text-2xl">💡</span>
-              </div>
-              <div className="flex-1">
-                <h3 className="font-bold text-blue-900 mb-2">Gợi ý cho bạn</h3>
-                <p className="text-blue-800 mb-4">
-                  Bạn có {wrongCount} câu trả lời sai. Hãy ôn lại những câu này để cải thiện kết quả!
-                </p>
-                <div className="flex space-x-3">
-                  <Button
-                    size="sm"
-                    onClick={handleCreatePracticeSession}
-                  >
-                    Ôn lại câu sai
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => navigate(`/exam/${examId}`)}
-                  >
-                    Làm lại bài thi
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </Card>
-        )}
       </div>
     </div>
   );

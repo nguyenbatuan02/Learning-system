@@ -11,9 +11,22 @@ from app.services.grading_service import grading_service
 from datetime import datetime, timezone
 import logging
 import traceback
+import json
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+
+def serialize_answer(answer):
+    """Convert answer to string for consistent API response"""
+    if answer is None:
+        return ""
+    if isinstance(answer, list):
+        return ", ".join(str(item) for item in answer)
+    if isinstance(answer, dict):
+        return json.dumps(answer)
+    return str(answer)
+
 
 @router.post("/start", response_model=StartExamResponse)
 async def start_exam(
@@ -39,7 +52,7 @@ async def start_exam(
             )
         
         # Check if exam is published
-        if not exam.data["is_published"]:
+        if not exam.data.get("is_published", False):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Exam is not published yet"
@@ -60,17 +73,19 @@ async def start_exam(
             user_exam_id=response.data[0]["id"],
             exam_id=data.exam_id,
             started_at=response.data[0]["started_at"],
-            duration=exam.data.get("duration")
+            duration=exam.data.get("duration_minutes")
         )
         
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"Start exam error: {str(e)}")
+        logger.error(traceback.format_exc())
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
         )
+
 
 @router.post("/answer")
 async def submit_answer(
@@ -102,6 +117,11 @@ async def submit_answer(
                 detail="Exam is already submitted"
             )
         
+        # Convert user_answer to appropriate format for storage
+        user_answer_value = data.user_answer
+        if isinstance(user_answer_value, list):
+            user_answer_value = json.dumps(user_answer_value)
+        
         # Check if answer already exists
         existing = supabase.table("user_answers")\
             .select("id")\
@@ -112,7 +132,7 @@ async def submit_answer(
         if existing.data:
             # Update existing answer
             supabase.table("user_answers")\
-                .update({"user_answer": data.user_answer})\
+                .update({"user_answer": user_answer_value})\
                 .eq("id", existing.data[0]["id"])\
                 .execute()
         else:
@@ -120,7 +140,7 @@ async def submit_answer(
             answer = {
                 "user_exam_id": data.user_exam_id,
                 "question_id": data.question_id,
-                "user_answer": data.user_answer
+                "user_answer": user_answer_value
             }
             supabase.table("user_answers").insert(answer).execute()
         
@@ -130,10 +150,12 @@ async def submit_answer(
         raise
     except Exception as e:
         logger.error(f"Submit answer error: {str(e)}")
+        logger.error(traceback.format_exc())
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
         )
+
 
 @router.post("/submit", response_model=ExamResultResponse)
 async def submit_exam(
@@ -145,41 +167,61 @@ async def submit_exam(
     Nộp bài thi và chấm điểm
     """
     try:
-        logger.info(f"Submitting exam: {data.user_exam_id}")
-        
         # Get user_exam
         user_exam = supabase.table("user_exams")\
             .select("*")\
             .eq("id", data.user_exam_id)\
             .eq("user_id", current_user["id"])\
-            .single()\
             .execute()
         
-        if not user_exam.data:
+        if not user_exam.data or len(user_exam.data) == 0:
+            all_exams = supabase.table("user_exams")\
+                .select("id, exam_id, status, created_at")\
+                .eq("user_id", current_user["id"])\
+                .order("created_at", desc=True)\
+                .limit(10)\
+                .execute()
+            
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
-                detail="Exam session not found"
+                detail=f"Exam session {data.user_exam_id} not found"
             )
         
-        if user_exam.data["status"] != "in_progress":
+        user_exam_data = user_exam.data[0]
+        
+        if user_exam_data["status"] != "in_progress":
+            logger.warning(f"⚠️ Exam status is {user_exam_data['status']}, not in_progress")
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Exam is already submitted"
+                detail=f"Exam is already {user_exam_data['status']}"
             )
         
         # Get exam details
         exam = supabase.table("exams")\
             .select("*")\
-            .eq("id", user_exam.data["exam_id"])\
-            .single()\
+            .eq("id", user_exam_data["exam_id"])\
             .execute()
         
-        # Get questions
-        questions = supabase.table("questions")\
-            .select("*")\
-            .eq("exam_id", user_exam.data["exam_id"])\
+        if not exam.data or len(exam.data) == 0:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Exam not found"
+            )
+        
+        exam_data = exam.data[0]
+        
+        # Get questions from exam_questions with question_bank_items
+        exam_questions = supabase.table("exam_questions")\
+            .select("*, question_bank_items(*)")\
+            .eq("exam_id", user_exam_data["exam_id"])\
             .order("order_index")\
             .execute()
+        
+        if not exam_questions.data:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="No questions found for this exam"
+            )
         
         # Get user answers
         user_answers = supabase.table("user_answers")\
@@ -187,35 +229,45 @@ async def submit_exam(
             .eq("user_exam_id", data.user_exam_id)\
             .execute()
         
-        # Create answer map
         answer_map = {ans["question_id"]: ans for ans in user_answers.data}
         
         # Grade each question
         total_score = 0
         results = []
         
-        for question in questions.data:
-            user_answer_record = answer_map.get(question["id"])
+        for exam_question in exam_questions.data:
+            question = exam_question.get("question_bank_items")
+            
+            if not question:
+                logger.warning(f"⚠️ Question bank item not found for exam_question {exam_question['id']}")
+                continue
+            
+            user_answer_record = answer_map.get(exam_question["id"])
             user_answer_text = user_answer_record["user_answer"] if user_answer_record else ""
             
+            # Parse user_answer if it's a JSON string
+            if user_answer_text and isinstance(user_answer_text, str):
+                try:
+                    parsed = json.loads(user_answer_text)
+                    user_answer_text = parsed
+                except:
+                    pass
+            
             if not user_answer_text:
-                # No answer provided
                 is_correct = False
                 marks_obtained = 0
                 feedback = "Chưa trả lời"
             else:
-                # Grade the answer
                 is_correct, marks_obtained, feedback = grading_service.grade_answer(
                     question["question_type"],
                     question["question_text"],
                     user_answer_text,
                     question["correct_answer"],
-                    question["marks"]
+                    exam_question["marks"]
                 )
             
             total_score += marks_obtained
             
-            # Update user_answer with grading result
             if user_answer_record:
                 supabase.table("user_answers")\
                     .update({
@@ -227,47 +279,38 @@ async def submit_exam(
                     .execute()
             
             results.append(QuestionResult(
-                question_id=question["id"],
+                question_id=exam_question["id"],
                 question_text=question["question_text"],
-                user_answer=user_answer_text,
-                correct_answer=question["correct_answer"],
+                user_answer=serialize_answer(user_answer_text),
+                correct_answer=serialize_answer(question["correct_answer"]),
                 is_correct=is_correct,
                 marks_obtained=marks_obtained,
-                marks=question["marks"],
+                marks=float(exam_question["marks"]),
                 explanation=question.get("explanation"),
                 ai_feedback=feedback
             ))
         
         # Calculate time spent
         try:
-            started_at_str = user_exam.data["started_at"]
-            logger.info(f"⏰ started_at: {started_at_str}")
-            # Parse started_at with timezone
+            started_at_str = user_exam_data["started_at"]
+            
             if isinstance(started_at_str, str):
                 started_at_str = started_at_str.replace('Z', '+00:00')
                 started_at = datetime.fromisoformat(started_at_str)
             else:
                 started_at = started_at_str
             
-            # Ensure started_at has timezone
             if started_at.tzinfo is None:
                 started_at = started_at.replace(tzinfo=timezone.utc)
-
             
-            # submitted_at MUST have timezone
             submitted_at = datetime.now(timezone.utc)
-            
-            # Now both have timezone, can subtract
             time_spent = int((submitted_at - started_at).total_seconds())
-            logger.info(f"⏱️ Time spent: {time_spent} seconds")
         
         except Exception as e:
             logger.error(f"Time calculation error: {str(e)}")
             time_spent = 0
             submitted_at = datetime.now(timezone.utc)
-                
-        # Update user_exam with results
-        supabase.table("user_exams")\
+        update_result = supabase.table("user_exams")\
             .update({
                 "submitted_at": submitted_at.isoformat(),
                 "total_score": total_score,
@@ -279,15 +322,133 @@ async def submit_exam(
         
         # Update user statistics
         _update_user_statistics(current_user["id"], total_score, time_spent, supabase)
+        response = ExamResultResponse(
+            user_exam_id=data.user_exam_id, 
+            exam_title=exam_data["title"],
+            total_score=total_score,
+            max_score=float(exam_data["total_marks"]),
+            percentage=(total_score / exam_data["total_marks"] * 100) if exam_data["total_marks"] > 0 else 0,
+            time_spent=time_spent,
+            submitted_at=submitted_at,
+            questions=results
+        )
         
-        logger.info(f"Exam graded: {total_score}/{exam.data['total_marks']}")
+        return response
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Submit exam error: {str(e)}")
+        logger.error(traceback.format_exc())
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(e)
+        )
+    
+@router.get("/result/{user_exam_id}", response_model=ExamResultResponse)
+async def get_exam_result(
+    user_exam_id: str,
+    current_user: dict = Depends(get_current_user),
+    supabase: Client = Depends(get_supabase_admin)
+):
+    """
+    Xem kết quả bài thi đã làm
+    """
+    try:
+        user_exam = supabase.table("user_exams")\
+            .select("*")\
+            .eq("id", user_exam_id)\
+            .eq("user_id", current_user["id"])\
+            .execute() 
+        if not user_exam.data or len(user_exam.data) == 0:
+            all_user_exams = supabase.table("user_exams")\
+                .select("id, user_id, exam_id, status")\
+                .eq("user_id", current_user["id"])\
+                .execute()
+            
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Result not found for exam {user_exam_id}"
+            )
+        
+        user_exam_data = user_exam.data[0] 
+        # Get exam
+        exam = supabase.table("exams")\
+            .select("*")\
+            .eq("id", user_exam_data["exam_id"])\
+            .execute()
+        
+        if not exam.data or len(exam.data) == 0:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Exam not found"
+            )
+        
+        exam_data = exam.data[0]
+        exam_questions = supabase.table("exam_questions")\
+            .select("*, question_bank_items(*)")\
+            .eq("exam_id", user_exam_data["exam_id"])\
+            .order("order_index")\
+            .execute()
+        
+        user_answers = supabase.table("user_answers")\
+            .select("*")\
+            .eq("user_exam_id", user_exam_id)\
+            .execute()
+        
+        answer_map = {ans["question_id"]: ans for ans in user_answers.data}
+        
+        results = []
+        for exam_question in exam_questions.data:
+            question = exam_question.get("question_bank_items")
+            
+            if not question:
+                logger.warning(f"⚠️ Question bank item not found for exam_question {exam_question['id']}")
+                continue
+            
+            answer = answer_map.get(exam_question["id"])
+            
+            user_answer_text = ""
+            if answer and answer.get("user_answer"):
+                user_answer_text = answer["user_answer"]
+                if isinstance(user_answer_text, str):
+                    try:
+                        parsed = json.loads(user_answer_text)
+                        user_answer_text = parsed
+                    except:
+                        pass
+            
+            results.append(QuestionResult(
+                question_id=exam_question["id"],
+                question_text=question.get("question_text", ""),
+                user_answer=serialize_answer(user_answer_text),
+                correct_answer=serialize_answer(question.get("correct_answer", "")),
+                is_correct=answer.get("is_correct", False) if answer else False,
+                marks_obtained=float(answer.get("marks_obtained", 0)) if answer else 0.0,
+                marks=float(exam_question.get("marks", 0)),
+                explanation=question.get("explanation"),
+                ai_feedback=answer.get("ai_feedback") if answer else None
+            ))
+        
+        total_score = float(user_exam_data.get("total_score") or 0)
+        max_score = float(exam_data.get("total_marks") or 1)
+        time_spent = int(user_exam_data.get("time_spent") or 0)
+        
+        submitted_at = user_exam_data.get("submitted_at")
+        if submitted_at and isinstance(submitted_at, str):
+            try:
+                submitted_at = datetime.fromisoformat(submitted_at.replace('Z', '+00:00'))
+            except:
+                submitted_at = datetime.now(timezone.utc)
+        elif not submitted_at:
+            submitted_at = datetime.now(timezone.utc)
         
         return ExamResultResponse(
-            user_exam_id=data.user_exam_id,
-            exam_title=exam.data["title"],
+            user_exam_id=user_exam_id,
+            exam_title=exam_data.get("title", "Untitled Exam"),
             total_score=total_score,
-            max_score=exam.data["total_marks"],
-            percentage=(total_score / exam.data["total_marks"] * 100) if exam.data["total_marks"] > 0 else 0,
+            max_score=max_score,
+            percentage=(total_score / max_score * 100) if max_score > 0 else 0,
             time_spent=time_spent,
             submitted_at=submitted_at,
             questions=results
@@ -296,8 +457,7 @@ async def submit_exam(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Submit exam error: {str(e)}")
-        import traceback
+        logger.error(f"❌ Get result error: {str(e)}")
         logger.error(traceback.format_exc())
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -325,7 +485,7 @@ def _update_user_statistics(user_id: str, score: float, time_spent: int, supabas
                     "total_exams_completed": current["total_exams_completed"] + 1,
                     "average_score": new_avg,
                     "total_time_spent": current["total_time_spent"] + time_spent,
-                    "last_activity": datetime.now().isoformat()
+                    "last_activity": datetime.now(timezone.utc).isoformat()
                 })\
                 .eq("user_id", user_id)\
                 .execute()
@@ -337,88 +497,9 @@ def _update_user_statistics(user_id: str, score: float, time_spent: int, supabas
                 "total_exams_completed": 1,
                 "average_score": score,
                 "total_time_spent": time_spent,
-                "last_activity": datetime.now().isoformat()
+                "last_activity": datetime.now(timezone.utc).isoformat()
             }).execute()
             
     except Exception as e:
         logger.error(f"Update statistics error: {str(e)}")
-
-@router.get("/result/{user_exam_id}", response_model=ExamResultResponse)
-async def get_exam_result(
-    user_exam_id: str,
-    current_user: dict = Depends(get_current_user),
-    supabase: Client = Depends(get_supabase)
-):
-    """
-    Xem kết quả bài thi đã làm
-    """
-    try:
-        # Get user_exam with results
-        user_exam = supabase.table("user_exams")\
-            .select("*")\
-            .eq("id", user_exam_id)\
-            .eq("user_id", current_user["id"])\
-            .single()\
-            .execute()
-        if not user_exam.data:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Result not found"
-            )
-        
-        # Get exam
-        exam = supabase.table("exams")\
-            .select("*")\
-            .eq("id", user_exam.data["exam_id"])\
-            .single()\
-            .execute()
-        
-        # Get questions with answers
-        questions = supabase.table("questions")\
-            .select("*")\
-            .eq("exam_id", user_exam.data["exam_id"])\
-            .order("order_index")\
-            .execute()
-        
-        user_answers = supabase.table("user_answers")\
-            .select("*")\
-            .eq("user_exam_id", user_exam_id)\
-            .execute()
-        
-        answer_map = {ans["question_id"]: ans for ans in user_answers.data}
-        
-        results = []
-        for question in questions.data:
-            answer = answer_map.get(question["id"])
-            
-            results.append(QuestionResult(
-                question_id=question["id"],
-                question_text=question["question_text"],
-                user_answer=answer["user_answer"] if answer else "",
-                correct_answer=question["correct_answer"],
-                is_correct=answer["is_correct"] if answer else False,
-                marks_obtained=answer["marks_obtained"] if answer else 0,
-                marks=question["marks"],
-                explanation=question.get("explanation"),
-                ai_feedback=answer.get("ai_feedback") if answer else None
-            ))
-        
-        return ExamResultResponse(
-            user_exam_id=user_exam_id,
-            exam_title=exam.data["title"],
-            total_score=user_exam.data["total_score"] or 0,
-            max_score=exam.data["total_marks"],
-            percentage=(user_exam.data["total_score"] / exam.data["total_marks"] * 100) if exam.data["total_marks"] > 0 else 0,
-            time_spent=user_exam.data.get("time_spent", 0),
-            submitted_at=user_exam.data["submitted_at"],
-            questions=results
-        )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Get result error: {str(e)}")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
-        )
+        logger.error(traceback.format_exc())

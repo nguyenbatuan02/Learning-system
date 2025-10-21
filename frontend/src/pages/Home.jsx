@@ -147,7 +147,7 @@ const Home = () => {
                   <div
                     key={exam.id}
                     className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50 transition-all cursor-pointer"
-                    onClick={() => navigate(`/exam/${exam.id}`)}
+                    onClick={() => navigate(`/exam/${exam.id}/take`)}
                   >
                     <div className="flex-1">
                       <h3 className="font-medium text-gray-900">{exam.title}</h3>
