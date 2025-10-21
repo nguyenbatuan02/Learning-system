@@ -2,7 +2,8 @@ import axios from 'axios'
 import { supabase } from './supabaseClient'
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL
+//   baseURL: import.meta.env.VITE_API_URL
+    baseURL: "https://learning-system-bh7b.onrender.com"
 })
 
 // Add token to requests
