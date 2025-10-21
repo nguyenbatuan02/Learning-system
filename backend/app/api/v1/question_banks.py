@@ -7,7 +7,7 @@ from app.models.question_bank import (
 )
 from app.api.deps import get_current_user
 from supabase import Client
-from app.core.supabase import get_supabase
+from app.core.supabase import get_supabase_admin, get_supabase
 
 router = APIRouter()
 
@@ -15,7 +15,7 @@ router = APIRouter()
 async def create_question_bank(
     data: QuestionBankCreate,
     current_user: dict = Depends(get_current_user),
-    supabase: Client = Depends(get_supabase)
+    supabase: Client = Depends(get_supabase_admin)
 ):
     """Tạo ngân hàng câu hỏi mới"""
     try:
@@ -42,7 +42,7 @@ async def get_question_banks(
     is_public: Optional[bool] = None,
     search: Optional[str] = None,
     current_user: dict = Depends(get_current_user),
-    supabase: Client = Depends(get_supabase)
+    supabase: Client = Depends(get_supabase_admin)
 ):
     """Lấy danh sách ngân hàng câu hỏi"""
     try:
@@ -76,7 +76,7 @@ async def get_question_banks(
 async def get_question_bank(
     bank_id: str,
     current_user: dict = Depends(get_current_user),
-    supabase: Client = Depends(get_supabase)
+    supabase: Client = Depends(get_supabase_admin)
 ):
     """Lấy chi tiết ngân hàng câu hỏi"""
     try:
@@ -106,7 +106,7 @@ async def update_question_bank(
     bank_id: str,
     data: QuestionBankUpdate,
     current_user: dict = Depends(get_current_user),
-    supabase: Client = Depends(get_supabase)
+    supabase: Client = Depends(get_supabase_admin)
 ):
     """Cập nhật ngân hàng câu hỏi"""
     try:
@@ -130,7 +130,7 @@ async def update_question_bank(
 async def delete_question_bank(
     bank_id: str,
     current_user: dict = Depends(get_current_user),
-    supabase: Client = Depends(get_supabase)
+    supabase: Client = Depends(get_supabase_admin)
 ):
     """Xóa ngân hàng câu hỏi"""
     try:
@@ -153,7 +153,7 @@ async def add_question_to_bank(
     bank_id: str,
     data: QuestionBankItemCreate,
     current_user: dict = Depends(get_current_user),
-    supabase: Client = Depends(get_supabase)
+    supabase: Client = Depends(get_supabase_admin)
 ):
     """Thêm câu hỏi vào ngân hàng"""
     try:
@@ -188,7 +188,7 @@ async def get_questions_from_bank(
     tags: Optional[str] = Query(None),  # Comma-separated
     search: Optional[str] = None,
     current_user: dict = Depends(get_current_user),
-    supabase: Client = Depends(get_supabase)
+    supabase: Client = Depends(get_supabase_admin)
 ):
     """Lấy câu hỏi từ ngân hàng"""
     try:
@@ -226,7 +226,7 @@ async def update_question_in_bank(
     item_id: str,
     data: QuestionBankItemUpdate,
     current_user: dict = Depends(get_current_user),
-    supabase: Client = Depends(get_supabase)
+    supabase: Client = Depends(get_supabase_admin)
 ):
     """Cập nhật câu hỏi trong ngân hàng"""
     try:
@@ -254,7 +254,7 @@ async def delete_question_from_bank(
     bank_id: str,
     item_id: str,
     current_user: dict = Depends(get_current_user),
-    supabase: Client = Depends(get_supabase)
+    supabase: Client = Depends(get_supabase_admin)
 ):
     """Xóa câu hỏi khỏi ngân hàng"""
     try:
@@ -277,7 +277,7 @@ async def share_question_bank(
     bank_id: str,
     data: ShareQuestionBankRequest,
     current_user: dict = Depends(get_current_user),
-    supabase: Client = Depends(get_supabase)
+    supabase: Client = Depends(get_supabase_admin)
 ):
     """Chia sẻ ngân hàng câu hỏi"""
     try:
@@ -308,7 +308,7 @@ async def share_question_bank(
 async def import_shared_bank(
     share_code: str,
     current_user: dict = Depends(get_current_user),
-    supabase: Client = Depends(get_supabase)
+    supabase: Client = Depends(get_supabase_admin)
 ):
     """Import ngân hàng câu hỏi được chia sẻ"""
     try:

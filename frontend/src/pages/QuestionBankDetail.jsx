@@ -37,10 +37,31 @@ const QuestionBankDetail = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [selectedQuestion, setSelectedQuestion] = useState(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [showEditBankModal, setShowEditBankModal] = useState(false);
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [editBankData, setEditBankData] = useState({
+    name: '',
+    description: '',
+    is_public: false
+  });
+  const [updateLoading, setUpdateLoading] = useState(false);
+  const [shareCode, setShareCode] = useState('');
+  const [shareLoading, setShareLoading] = useState(false);
 
-  useEffect(() => {
-    loadBankDetail();
-  }, [bankId]);
+
+useEffect(() => {
+  loadBankDetail();
+}, [bankId]);
+
+ useEffect(() => {
+  if (bank) {
+    setEditBankData({
+      name: bank.name,
+      description: bank.description || '',
+      is_public: bank.is_public
+    });
+  }
+}, [bank]);
 
   const loadBankDetail = async () => {
     try {
@@ -59,6 +80,44 @@ const QuestionBankDetail = () => {
       setLoading(false);
     }
   };
+
+  // Handle update bank
+const handleUpdateBank = async () => {
+  try {
+    setUpdateLoading(true);
+    await questionBankService.update(bankId, editBankData);
+    toast.success('Cập nhật ngân hàng thành công!');
+    setShowEditBankModal(false);
+    loadBankDetail(); // Reload data
+  } catch (error) {
+    console.error('Update error:', error);
+    toast.error('Không thể cập nhật ngân hàng');
+  } finally {
+    setUpdateLoading(false);
+  }
+};
+
+    // Handle share bank
+const handleShareBank = async () => {
+  try {
+    setShareLoading(true);
+    const result = await questionBankService.share(bankId);
+    setShareCode(result.share_code);
+    toast.success('Tạo link chia sẻ thành công!');
+  } catch (error) {
+    console.error('Share error:', error);
+    toast.error('Không thể tạo link chia sẻ');
+  } finally {
+    setShareLoading(false);
+  }
+};
+
+// Copy share link
+const copyShareLink = () => {
+  const link = `${window.location.origin}/question-banks/import/${shareCode}`;
+  navigator.clipboard.writeText(link);
+  toast.success('Đã copy link chia sẻ!');
+};
 
   const handleDeleteQuestion = async () => {
     if (!selectedQuestion) return;
@@ -142,6 +201,13 @@ const QuestionBankDetail = () => {
 
         {/* Actions */}
         <div className="flex flex-wrap gap-3 mt-4 lg:mt-0">
+            <Button
+                variant="outline"
+                icon={Edit}
+                onClick={() => setShowEditBankModal(true)}
+            >
+                Chỉnh sửa
+            </Button>
           <Button
             variant="outline"
             icon={Plus}
@@ -150,15 +216,8 @@ const QuestionBankDetail = () => {
             Thêm câu hỏi
           </Button>
           <Button
-            variant="outline"
-            icon={Share2}
-            onClick={() => toast.success('Tính năng chia sẻ sẽ sớm có!')}
-          >
-            Chia sẻ
-          </Button>
-          <Button
             icon={Target}
-            onClick={() => navigate(`/create-exam/${bankId}`)}
+            onClick={() => navigate(`/question-banks/${bankId}/create-exam`)}
           >
             Tạo đề thi
           </Button>
@@ -180,10 +239,13 @@ const QuestionBankDetail = () => {
             onChange={(e) => setFilterType(e.target.value)}
             options={[
               { value: '', label: 'Tất cả loại câu' },
-              { value: 'multiple_choice', label: 'Trắc nghiệm' },
+              { value: 'multiple_choice', label: 'Trắc nghiệm 1 đáp án' },
+              { value: 'multiple_answer', label: 'Trắc nghiệm nhiều đáp án' },  
               { value: 'true_false', label: 'Đúng/Sai' },
               { value: 'short_answer', label: 'Trả lời ngắn' },
               { value: 'essay', label: 'Tự luận' },
+              { value: 'fill_blank', label: 'Điền từ' },  
+              { value: 'ordering', label: 'Sắp xếp' },  
             ]}
           />
           <Select
@@ -203,10 +265,16 @@ const QuestionBankDetail = () => {
       {/* Statistics */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <Card>
-          <p className="text-sm text-gray-600 mb-1">Trắc nghiệm</p>
+          <p className="text-sm text-gray-600 mb-1">Trắc nghiệm 1 đáp án</p>
           <p className="text-2xl font-bold text-gray-900">
             {questionsByType['multiple_choice']?.length || 0}
           </p>
+        </Card>
+        <Card>
+            <p className="text-sm text-gray-600 mb-1">Trắc nghiệm nhiều đáp án</p>
+            <p className="text-2xl font-bold text-gray-900">
+            {questionsByType['multiple_answer']?.length || 0}
+            </p>
         </Card>
         <Card>
           <p className="text-sm text-gray-600 mb-1">Đúng/Sai</p>
@@ -225,6 +293,18 @@ const QuestionBankDetail = () => {
           <p className="text-2xl font-bold text-gray-900">
             {questionsByType['essay']?.length || 0}
           </p>
+        </Card>
+         <Card>
+            <p className="text-sm text-gray-600 mb-1">Điền từ</p>
+            <p className="text-2xl font-bold text-gray-900">
+            {questionsByType['fill_blank']?.length || 0}
+            </p>
+        </Card>
+        <Card>
+            <p className="text-sm text-gray-600 mb-1">Sắp xếp</p>
+            <p className="text-2xl font-bold text-gray-900">
+            {questionsByType['ordering']?.length || 0}
+            </p>
         </Card>
       </div>
 
@@ -287,6 +367,134 @@ const QuestionBankDetail = () => {
           Hành động này không thể hoàn tác.
         </p>
       </Modal>
+      {/* Edit Bank Modal */}
+      <Modal
+        isOpen={showEditBankModal}
+        onClose={() => setShowEditBankModal(false)}
+        title="Chỉnh sửa ngân hàng đề"
+        size="lg"
+        footer={
+          <div className="flex justify-end space-x-3">
+            <Button
+              variant="outline"
+              onClick={() => setShowEditBankModal(false)}
+            >
+              Hủy
+            </Button>
+            <Button
+              onClick={handleUpdateBank}
+              loading={updateLoading}
+            >
+              Lưu thay đổi
+            </Button>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Tên ngân hàng đề <span className="text-red-500">*</span>
+            </label>
+            <Input
+              value={editBankData.name}
+              onChange={(e) => setEditBankData({ ...editBankData, name: e.target.value })}
+              placeholder="Ví dụ: Toán 12 - Chương 1"
+            />
+          </div>
+          
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Mô tả
+            </label>
+            <textarea
+              value={editBankData.description}
+              onChange={(e) => setEditBankData({ ...editBankData, description: e.target.value })}
+              rows={4}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="Mô tả ngắn về ngân hàng đề này..."
+            />
+          </div>
+
+          <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+            <div>
+              <p className="font-medium text-gray-900">Công khai ngân hàng</p>
+              <p className="text-sm text-gray-500">
+                Cho phép người khác xem và sao chép ngân hàng này
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setEditBankData({ ...editBankData, is_public: !editBankData.is_public })}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                editBankData.is_public ? 'bg-blue-600' : 'bg-gray-200'
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  editBankData.is_public ? 'translate-x-6' : 'translate-x-1'
+                }`}
+              />
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Share Modal */}
+      <Modal
+        isOpen={showShareModal}
+        onClose={() => setShowShareModal(false)}
+        title="Chia sẻ ngân hàng đề"
+        footer={
+          <div className="flex justify-end space-x-3">
+            <Button
+              variant="outline"
+              onClick={() => setShowShareModal(false)}
+            >
+              Đóng
+            </Button>
+            {shareCode && (
+              <Button
+                onClick={copyShareLink}
+              >
+                Copy Link
+              </Button>
+            )}
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          {!shareCode ? (
+            <>
+              <p className="text-gray-600">
+                Tạo link chia sẻ để người khác có thể sao chép ngân hàng câu hỏi này vào tài khoản của họ.
+              </p>
+              <Button
+                onClick={handleShareBank}
+                loading={shareLoading}
+                className="w-full"
+              >
+                Tạo link chia sẻ
+              </Button>
+            </>
+          ) : (
+            <>
+              <p className="text-sm text-gray-600">
+                Link chia sẻ của bạn:
+              </p>
+              <div className="flex items-center space-x-2">
+                <Input
+                  value={`${window.location.origin}/question-banks/import/${shareCode}`}
+                  readOnly
+                  className="flex-1"
+                />
+              </div>
+              <p className="text-xs text-gray-500">
+                Người khác có thể import ngân hàng này bằng link trên
+              </p>
+            </>
+          )}
+        </div>
+      </Modal>
     </div>
   );
 };
@@ -295,10 +503,13 @@ const QuestionBankDetail = () => {
 const QuestionCard = ({ question, index, onEdit, onDelete }) => {
   const getTypeLabel = (type) => {
     const labels = {
-      multiple_choice: 'Trắc nghiệm',
+      multiple_choice: 'Trắc nghiệm 1 ĐA',
+      multiple_answer: 'Trắc nghiệm nhiều ĐA',
       true_false: 'Đúng/Sai',
       short_answer: 'Trả lời ngắn',
       essay: 'Tự luận',
+      fill_blank: 'Điền từ',
+      ordering: 'Sắp xếp',
     };
     return labels[type] || type;
   };
@@ -330,34 +541,54 @@ const QuestionCard = ({ question, index, onEdit, onDelete }) => {
           </div>
           <p className="text-gray-900 font-medium mb-3">{question.question_text}</p>
           
-          {/* Options for multiple choice */}
-          {question.question_type === 'multiple_choice' && question.options && (
+          {/* Options for multiple choice & multiple answer */}
+          {(question.question_type === 'multiple_choice' || question.question_type === 'multiple_answer') && question.options && (
             <div className="space-y-2 mb-3">
-              {Object.entries(question.options).map(([key, value]) => (
-                <div
-                  key={key}
-                  className={`flex items-start space-x-2 text-sm ${
-                    question.correct_answer === key
-                      ? 'text-green-700 font-medium'
-                      : 'text-gray-600'
-                  }`}
-                >
-                  {question.correct_answer === key && (
-                    <CheckCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
-                  )}
-                  <span>
-                    {key}) {value}
-                  </span>
-                </div>
-              ))}
+              {Object.entries(question.options).map(([key, value]) => {
+                const isCorrect = Array.isArray(question.correct_answer)
+                  ? question.correct_answer.includes(key)
+                  : question.correct_answer === key;
+                
+                return (
+                  <div
+                    key={key}
+                    className={`flex items-start space-x-2 text-sm ${
+                      isCorrect
+                        ? 'text-green-700 font-medium'
+                        : 'text-gray-600'
+                    }`}
+                  >
+                    {isCorrect && (
+                      <CheckCircle className="h-4 w-4 flex-shrink-0 mt-0.5" />
+                    )}
+                    <span>
+                      {key}) {value}
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           )}
 
-          {/* Correct answer for other types */}
-          {question.question_type !== 'multiple_choice' && (
+          {/* Correct answer for ordering */}
+          {question.question_type === 'ordering' && (
+            <div className="text-sm mb-3">
+              <span className="font-medium text-gray-700">Thứ tự đúng: </span>
+              <span className="text-gray-600">
+                {Array.isArray(question.correct_answer)
+                  ? question.correct_answer.join(' → ')
+                  : question.correct_answer}
+              </span>
+            </div>
+          )}
+
+          {/* Correct answer for other types (short_answer, essay, fill_blank, true_false) */}
+          {!['multiple_choice', 'multiple_answer', 'ordering'].includes(question.question_type) && (
             <div className="text-sm text-gray-600 mb-3">
               <span className="font-medium">Đáp án: </span>
-              {question.correct_answer}
+              {Array.isArray(question.correct_answer)
+                ? question.correct_answer.join(', ')
+                : question.correct_answer}
             </div>
           )}
 

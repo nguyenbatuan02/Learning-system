@@ -1,57 +1,85 @@
 import api from '../lib/api';
 
 export const examService = {
-  // Get all exams
+
+  // GET ALL EXAMS
   getAll: async (params = {}) => {
     const { data } = await api.get('/api/v1/exams/', { params });
     return data;
   },
 
-  // Get exam by ID (with questions)
+  // GET EXAM BY ID
   getById: async (examId) => {
     const { data } = await api.get(`/api/v1/exams/${examId}`);
     return data;
   },
 
-  // Create exam
-  create: async (examData) => {
-    const { data } = await api.post('/api/v1/exams/', examData);
+  // CREATE EXAM FROM BANK - RANDOM MODE
+  createFromBank: async (examData) => {
+    const { data } = await api.post('/api/v1/exams/create-from-bank', examData);
     return data;
   },
 
-  // Update exam
+  // CREATE EXAM FROM SELECTED QUESTIONS - SELECT MODE
+
+  createFromSelected: async (examData) => {
+    const { data } = await api.post('/api/v1/exams/create-from-selected', examData);
+    return data;
+  },
+
+  // UPDATE EXAM
   update: async (examId, examData) => {
     const { data } = await api.put(`/api/v1/exams/${examId}`, examData);
     return data;
   },
 
-  // Delete exam
+  // DELETE EXAM
   delete: async (examId) => {
     const { data } = await api.delete(`/api/v1/exams/${examId}`);
     return data;
   },
 
-  // Generate random exam
-  generateRandom: async (generatorData) => {
-    const { data } = await api.post('/api/v1/exam-generator/generate-random', generatorData);
+  // PUBLISH EXAM
+  publish: async (examId) => {
+    const { data } = await api.post(`/api/v1/exams/${examId}/publish`);
     return data;
   },
 
-  // Create exam template
-  createTemplate: async (templateData) => {
-    const { data } = await api.post('/api/v1/exam-generator/templates', templateData);
+  // UNPUBLISH EXAM
+  unpublish: async (examId) => {
+    const { data } = await api.post(`/api/v1/exams/${examId}/unpublish`);
     return data;
   },
 
-  // Get exam templates
-  getTemplates: async () => {
-    const { data } = await api.get('/api/v1/exam-generator/templates');
+  // TAKE EXAM - Get exam for student
+  takeExam: async (examId) => {
+    // This will be used when student takes the exam
+    const { data } = await api.get(`/api/v1/exams/${examId}/take`);
     return data;
   },
 
-  // Generate from template
-  generateFromTemplate: async (templateId) => {
-    const { data } = await api.post(`/api/v1/exam-generator/templates/${templateId}/generate`);
+  // SUBMIT EXAM ANSWERS
+  submitExam: async (examId, answers) => {
+    const { data } = await api.post(`/api/v1/exams/${examId}/submit`, { answers });
+    return data;
+  },
+
+  // GET EXAM RESULT
+  getResult: async (examId, attemptId) => {
+    const { data } = await api.get(`/api/v1/exams/${examId}/result/${attemptId}`);
+    return data;
+  },
+
+
+  // GET EXAM STATISTICS
+  getStatistics: async (examId) => {
+    const { data } = await api.get(`/api/v1/exams/${examId}/statistics`);
+    return data;
+  },
+
+  // GET EXAM ATTEMPTS (for teacher)
+  getAttempts: async (examId) => {
+    const { data } = await api.get(`/api/v1/exams/${examId}/attempts`);
     return data;
   },
 };

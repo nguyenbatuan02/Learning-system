@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Upload as UploadIcon, File, X, AlertCircle, CheckCircle, Loader2 } from 'lucide-react';
+import { Upload as UploadIcon, File, X, AlertCircle, CheckCircle, Loader2, Edit3, Sparkles } from 'lucide-react';
 import { uploadService } from '../services/uploadService';
 import { aiService } from '../services/aiService';
 import Card from '../components/common/Card';
@@ -18,9 +18,18 @@ const Upload = () => {
   const [processing, setProcessing] = useState(false);
   const [processingStep, setProcessingStep] = useState('');
   const [uploadedFileId, setUploadedFileId] = useState(null);
+  
+  // NEW: States for OCR preview & edit
   const [extractedText, setExtractedText] = useState('');
+  const [editedText, setEditedText] = useState('');
+  const [showTextPreview, setShowTextPreview] = useState(false);
+  const [isEditingText, setIsEditingText] = useState(false);
+  
+  // States for AI analysis results
   const [extractedQuestions, setExtractedQuestions] = useState([]);
-  const [showPreview, setShowPreview] = useState(false);
+  const [showQuestionPreview, setShowQuestionPreview] = useState(false);
+  const [bankId, setBankId] = useState(null);
+  
   const [error, setError] = useState('');
 
   // Drag and drop handlers
@@ -47,7 +56,6 @@ const Upload = () => {
   };
 
   const handleFileSelect = (selectedFile) => {
-    // Validate file
     const maxSize = 10 * 1024 * 1024; // 10MB
     const allowedTypes = [
       'application/pdf',
@@ -70,7 +78,8 @@ const Upload = () => {
     setError('');
   };
 
-  const handleUpload = async () => {
+  // STEP 1: Upload & OCR
+  const handleUploadAndOCR = async () => {
     if (!file) return;
 
     try {
@@ -92,16 +101,11 @@ const Upload = () => {
       const processResponse = await uploadService.processFile(uploadResponse.id);
       
       setExtractedText(processResponse.extracted_text);
-      setProcessingStep('AI đang phân tích câu hỏi...');
-
-      // Analyze with AI
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      const aiResponse = await aiService.analyzeText(processResponse.extracted_text);
-      
-      setExtractedQuestions(aiResponse.questions || []);
+      setEditedText(processResponse.extracted_text); // Initialize edited text
       setProcessing(false);
-      setShowPreview(true);
-      toast.success(`Đã trích xuất ${aiResponse.questions?.length || 0} câu hỏi!`);
+      setShowTextPreview(true);
+      
+      toast.success('OCR hoàn tất! Vui lòng kiểm tra và chỉnh sửa nếu cần.');
 
     } catch (err) {
       console.error('Upload error:', err);
@@ -110,13 +114,55 @@ const Upload = () => {
     }
   };
 
-  const handleSaveToBank = () => {
-    if (!extractedQuestions.length) return;
-    
-    // Navigate to create question bank with extracted questions
-    navigate('/question-banks/create', {
-      state: { questions: extractedQuestions }
-    });
+  // STEP 2: AI Analyze
+  const handleAIAnalyze = async () => {
+    if (!editedText.trim()) {
+      toast.error('Văn bản không được để trống!');
+      return;
+    }
+
+    try {
+      setProcessing(true);
+      setProcessingStep('AI đang phân tích câu hỏi...');
+      setShowTextPreview(false);
+
+      // Analyze with AI
+      const aiResponse = await aiService.analyzeText(editedText);
+      
+      setExtractedQuestions(aiResponse.questions || []);
+      setBankId(aiResponse.bank_id);
+      setProcessing(false);
+      setShowQuestionPreview(true);
+      
+      toast.success(`Đã trích xuất ${aiResponse.questions?.length || 0} câu hỏi và lưu vào ngân hàng đề!`);
+
+    } catch (err) {
+      console.error('AI analysis error:', err);
+      setError(err.response?.data?.detail || 'Đã xảy ra lỗi khi phân tích. Vui lòng thử lại.');
+      setProcessing(false);
+      setShowTextPreview(true); 
+    }
+  };
+
+  const handleSaveTextEdit = () => {
+    setIsEditingText(false);
+    toast.success('Đã lưu chỉnh sửa!');
+  };
+
+  const handleViewBank = () => {
+    if (bankId) {
+      navigate(`/question-banks/${bankId}`);  
+    } else {
+      toast.error('Không tìm thấy ngân hàng đề');
+    }
+  };
+
+  const handleCreateExam = () => {
+    if (bankId) {
+      navigate(`/question-banks/${bankId}/create-exam`);  
+    } else {
+      toast.error('Không tìm thấy ngân hàng đề');
+    }
   };
 
   const handleReset = () => {
@@ -126,19 +172,42 @@ const Upload = () => {
     setProcessingStep('');
     setUploadedFileId(null);
     setExtractedText('');
+    setEditedText('');
     setExtractedQuestions([]);
-    setShowPreview(false);
+    setShowTextPreview(false);
+    setShowQuestionPreview(false);
+    setIsEditingText(false);
+    setExamId(null);
+    setBankId(null);
     setError('');
+  };
+
+  // Helper function to render question type badge
+  const getQuestionTypeBadge = (type) => {
+    const types = {
+      multiple_choice: { label: 'Trắc nghiệm 1 đáp án', color: 'blue' },
+      multiple_answer: { label: 'Trắc nghiệm nhiều đáp án', color: 'purple' },
+      true_false: { label: 'Đúng/Sai', color: 'green' },
+      short_answer: { label: 'Tự luận', color: 'orange' },
+      essay: { label: 'Tự luận dài', color: 'red' },
+      fill_blank: { label: 'Điền từ', color: 'pink' },
+      ordering: { label: 'Sắp xếp', color: 'indigo' }
+    };
+    
+    const config = types[type] || { label: type, color: 'gray' };
+    
+    return (
+      <span className={`text-xs bg-${config.color}-100 text-${config.color}-800 px-2 py-1 rounded`}>
+        {config.label}
+      </span>
+    );
   };
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">📤 Nhập Đề Thi</h1>
-        <p className="text-gray-600 mt-2">
-          Tải lên file đề thi của bạn để tự động trích xuất câu hỏi bằng AI
-        </p>
+        <h1 className="text-3xl font-bold text-gray-900">Upload file đề</h1>
       </div>
 
       {error && (
@@ -169,21 +238,16 @@ const Upload = () => {
               <h3 className="text-lg font-semibold text-gray-900 mb-2">
                 Kéo thả file vào đây
               </h3>
-              <p className="text-gray-600 mb-4">hoặc</p>
-              <Button type="button">
-                Chọn file từ máy
-              </Button>
               <p className="text-sm text-gray-500 mt-4">
                 Hỗ trợ: PDF, Word, Ảnh (JPG, PNG) • Tối đa 10MB
               </p>
             </label>
           </div>
-
         </Card>
       )}
 
       {/* Selected File */}
-      {file && !processing && (
+      {file && !processing && !showTextPreview && (
         <Card className="mb-6">
           <div className="flex items-center justify-between mb-6">
             <h3 className="text-lg font-semibold text-gray-900">File đã chọn</h3>
@@ -208,8 +272,8 @@ const Upload = () => {
           </div>
 
           <div className="flex space-x-3">
-            <Button onClick={handleUpload} className="flex-1" size="lg">
-              Bắt đầu xử lý
+            <Button onClick={handleUploadAndOCR} className="flex-1" size="lg">
+              Bắt đầu OCR
             </Button>
             <Button variant="outline" onClick={handleReset}>
               Hủy
@@ -229,24 +293,95 @@ const Upload = () => {
             <p className="text-gray-600 mb-6">
               Vui lòng đợi, quá trình này có thể mất 30-60 giây...
             </p>
-            <ProgressBar value={uploadProgress} size="lg" />
+            {uploadProgress > 0 && <ProgressBar value={uploadProgress} size="lg" />}
           </div>
         </Card>
       )}
 
-      {/* Preview Modal */}
+      {/* TEXT PREVIEW & EDIT Modal */}
       <Modal
-        isOpen={showPreview}
-        onClose={() => setShowPreview(false)}
-        title="Kết quả trích xuất"
+        isOpen={showTextPreview}
+        onClose={() => setShowTextPreview(false)}
+        title="📄 Văn bản đã trích xuất (OCR)"
+        size="xl"
+        footer={
+          <div className="flex justify-between items-center">
+            <Button variant="outline" onClick={handleReset}>
+              Tải file khác
+            </Button>
+            <div className="flex space-x-3">
+              {isEditingText ? (
+                <>
+                  <Button variant="outline" onClick={() => {
+                    setEditedText(extractedText);
+                    setIsEditingText(false);
+                  }}>
+                    Hủy chỉnh sửa
+                  </Button>
+                  <Button onClick={handleSaveTextEdit}>
+                    Lưu chỉnh sửa
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Button 
+                    variant="outline" 
+                    onClick={() => setIsEditingText(true)}
+                    icon={Edit3}
+                  >
+                    Chỉnh sửa
+                  </Button>
+                  <Button 
+                    onClick={handleAIAnalyze}
+                    icon={Sparkles}
+                  >
+                    AI Phân tích →
+                  </Button>
+                </>
+              )}
+            </div>
+          </div>
+        }
+      >
+        <div className="space-y-4">
+          <Alert type="info">
+            <strong>Kiểm tra kỹ văn bản!</strong> Nếu OCR có lỗi, bạn có thể chỉnh sửa trước khi AI phân tích.
+          </Alert>
+
+          {isEditingText ? (
+            <textarea
+              value={editedText}
+              onChange={(e) => setEditedText(e.target.value)}
+              className="w-full h-96 p-4 border border-gray-300 rounded-lg font-mono text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              placeholder="Chỉnh sửa văn bản tại đây..."
+            />
+          ) : (
+            <div className="bg-gray-50 p-6 rounded-lg h-96 overflow-y-auto">
+              <pre className="whitespace-pre-wrap font-mono text-sm text-gray-800">
+                {editedText}
+              </pre>
+            </div>
+          )}
+
+          <div className="text-sm text-gray-500">
+            Độ dài: {editedText.length} ký tự
+          </div>
+        </div>
+      </Modal>
+
+      {/* QUESTION PREVIEW Modal */}
+      <Modal
+        isOpen={showQuestionPreview}
+        onClose={() => setShowQuestionPreview(false)}
+        title="Kết quả phân tích AI"
         size="xl"
         footer={
           <div className="flex justify-end space-x-3">
             <Button variant="outline" onClick={handleReset}>
-              Tải file khác
+              Nhập đề mới
             </Button>
-            <Button onClick={handleSaveToBank}>
-              Lưu vào ngân hàng →
+            <Button onClick={() => navigate(`/question-banks/${bankId}`)}>
+                Xem ngân hàng đề →
             </Button>
           </div>
         }
@@ -258,10 +393,10 @@ const Upload = () => {
               <CheckCircle className="h-6 w-6 text-green-600 flex-shrink-0" />
               <div>
                 <h4 className="font-semibold text-green-900 mb-1">
-                  Xử lý thành công!
+                  Phân tích thành công!
                 </h4>
                 <p className="text-sm text-green-800">
-                  Đã trích xuất <strong>{extractedQuestions.length} câu hỏi</strong> từ file của bạn.
+                  Đã trích xuất <strong>{extractedQuestions.length} câu hỏi</strong> và tự động lưu vào ngân hàng đề.
                 </p>
               </div>
             </div>
@@ -270,38 +405,70 @@ const Upload = () => {
           {/* Questions Preview */}
           <div>
             <h4 className="font-semibold text-gray-900 mb-3">
-              Xem trước câu hỏi:
+              Danh sách câu hỏi:
             </h4>
             <div className="space-y-4 max-h-96 overflow-y-auto">
-              {extractedQuestions.slice(0, 5).map((q, index) => (
+              {extractedQuestions.map((q, index) => (
                 <div key={index} className="border border-gray-200 rounded-lg p-4">
                   <div className="flex items-start justify-between mb-2">
-                    <p className="font-medium text-gray-900">
-                      Câu {index + 1}: {q.question_text}
+                    <p className="font-medium text-gray-900 flex-1">
+                      <span className="text-blue-600">Câu {index + 1}:</span> {q.question_text}
                     </p>
-                    <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
-                      {q.question_type}
-                    </span>
+                    {getQuestionTypeBadge(q.question_type)}
                   </div>
+
+                  {/* Render options based on question type */}
                   {q.options && (
-                    <div className="space-y-1 text-sm text-gray-600">
-                      {Object.entries(q.options).map(([key, value]) => (
-                        <p key={key}>
-                          {key}) {value}
-                          {q.correct_answer === key && (
-                            <CheckCircle className="inline h-4 w-4 text-green-600 ml-2" />
-                          )}
+                    <div className="space-y-1 text-sm text-gray-600 mt-3">
+                      {Object.entries(q.options).map(([key, value]) => {
+                        const isCorrect = Array.isArray(q.correct_answer) 
+                          ? q.correct_answer.includes(key) 
+                          : q.correct_answer === key;
+                        
+                        return (
+                          <p key={key} className={isCorrect ? 'font-semibold text-green-700' : ''}>
+                            {key}) {value}
+                            {isCorrect && (
+                              <CheckCircle className="inline h-4 w-4 text-green-600 ml-2" />
+                            )}
+                          </p>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* For short answer / fill blank / ordering */}
+                  {!q.options && q.question_type !== 'ordering' && (
+                    <div className="mt-3 p-3 bg-green-50 rounded text-sm">
+                      <strong className="text-green-900">Đáp án:</strong>
+                      <p className="text-gray-700 mt-1">
+                        {Array.isArray(q.correct_answer) 
+                          ? q.correct_answer.join(', ') 
+                          : q.correct_answer}
+                      </p>
+                    </div>
+                  )}
+
+                  {/* For ordering - show as sequence */}
+                  {q.question_type === 'ordering' && (
+                    <div className="mt-3 p-3 bg-purple-50 rounded text-sm">
+                        <strong className="text-purple-900">Thứ tự đúng:</strong>
+                        <p className="text-gray-700 mt-1">
+                        {Array.isArray(q.correct_answer) 
+                            ? q.correct_answer.join(' → ') 
+                            : q.correct_answer}
                         </p>
-                      ))}
+                    </div>
+                    )}
+                  {/* Explanation */}
+                  {q.explanation && (
+                    <div className="mt-3 p-3 bg-blue-50 rounded text-sm">
+                      <strong className="text-blue-900">Giải thích:</strong>
+                      <p className="text-gray-700 mt-1">{q.explanation}</p>
                     </div>
                   )}
                 </div>
               ))}
-              {extractedQuestions.length > 5 && (
-                <p className="text-center text-sm text-gray-500">
-                  ... và {extractedQuestions.length - 5} câu hỏi khác
-                </p>
-              )}
             </div>
           </div>
         </div>

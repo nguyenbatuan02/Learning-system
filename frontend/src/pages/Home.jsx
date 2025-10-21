@@ -68,7 +68,6 @@ const Home = () => {
         <h1 className="text-3xl font-bold text-gray-900">
           👋 Chào {user?.full_name || 'bạn'}!
         </h1>
-        <p className="text-gray-600 mt-2">Hôm nay bạn muốn học gì?</p>
       </div>
 
       {/* Stats Cards */}
@@ -134,7 +133,7 @@ const Home = () => {
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-xl font-bold text-gray-900">Đề thi gần đây</h2>
               <Link
-                to="/question-banks"
+                to="/exams"
                 className="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center"
               >
                 Xem tất cả
@@ -155,11 +154,11 @@ const Home = () => {
                       <div className="flex items-center space-x-4 mt-2 text-sm text-gray-500">
                         <span className="flex items-center">
                           <BookOpen className="h-4 w-4 mr-1" />
-                          {exam.total_questions || 0} câu
+                          {exam.questions_count || 0} câu
                         </span>
                         <span className="flex items-center">
                           <Clock className="h-4 w-4 mr-1" />
-                          {exam.duration || 0} phút
+                          {exam.duration_minutes || 0} phút
                         </span>
                       </div>
                     </div>
@@ -235,15 +234,15 @@ const Home = () => {
                 icon={Plus}
                 onClick={() => navigate('/upload')}
               >
-                Nhập đề thi mới
+                 Tạo ngân hàng đề
               </Button>
               <Button
                 variant="outline"
                 className="w-full justify-start"
                 icon={Target}
-                onClick={() => navigate('/practice')}
+                onClick={() => navigate('/question-banks')}
               >
-                Ôn luyện ngay
+                Tạo đề thi mới
               </Button>
             </div>
           </Card>
@@ -282,7 +281,7 @@ const Home = () => {
                 <Button
                   size="sm"
                   variant="success"
-                  onClick={() => navigate('/practice')}
+                  onClick={() => navigate('/exams')}
                 >
                   Luyện tập →
                 </Button>

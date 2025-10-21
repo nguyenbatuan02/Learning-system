@@ -4,6 +4,7 @@ import {
   Home, 
   Upload, 
   BookOpen, 
+  FileText,
   Dumbbell, 
   User, 
   LogOut, 
@@ -32,6 +33,7 @@ const Navbar = () => {
     { to: '/', icon: Home, label: 'Trang chủ' },
     { to: '/upload', icon: Upload, label: 'Nhập đề' },
     { to: '/question-banks', icon: BookOpen, label: 'Ngân hàng' },
+    { to: '/exams', icon: FileText, label: 'Đề thi' }, 
     { to: '/practice', icon: Dumbbell, label: 'Ôn luyện' },
   ];
 
@@ -91,22 +93,10 @@ const Navbar = () => {
                     <p className="text-sm font-medium text-gray-900 leading-none">
                       {user?.full_name || 'User'}
                     </p>
-                    <p className="text-xs text-gray-500 mt-0.5">
-                      {user?.role === 'admin' ? 'Quản trị viên' : 'Học viên'}
-                    </p>
                   </div>
                 </Link>
 
-                {/* Settings */}
-                <Link
-                  to="/profile"
-                  className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors"
-                  title="Cài đặt"
-                >
-                  <Settings className="h-5 w-5" />
-                </Link>
-
-                {/* Admin Dashboard (if admin) */}
+                {/* Admin Dashboard */}
                 {user?.role === 'admin' && (
                   <Link
                     to="/admin"

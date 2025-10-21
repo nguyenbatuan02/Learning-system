@@ -2,8 +2,11 @@ import api from '../lib/api';
 
 export const aiService = {
   // Analyze text
-  analyzeText: async (text) => {
-    const { data } = await api.post('/api/v1/ai/analyze-text', { text });
+  analyzeText: async (text, language = 'vi') => {
+    const { data } = await api.post('/api/v1/ai/analyze-text', { 
+      text,
+      language 
+    });
     return data;
   },
 

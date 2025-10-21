@@ -17,16 +17,30 @@ import ResetPassword from './pages/auth/ResetPassword';
 // User Pages
 import Home from './pages/Home';
 import Upload from './pages/Upload';
+
+// Question Banks
 import QuestionBanks from './pages/QuestionBanks';
 import QuestionBankDetail from './pages/QuestionBankDetail';
-import CreateExam from './pages/CreateExam';
+import EditQuestion from './pages/EditQuestion';
+import AddQuestion from './pages/AddQuestion';
+// Exams
+import Exams from './pages/Exams';
+import ExamDetail from './pages/ExamDetail';
+import ExamEdit from './pages/ExamEdit';
+import CreateExamFromBank from './pages/CreateExamFromBank';
+
+// Take Exam
 import TakeExam from './pages/TakeExam';
 import ExamResult from './pages/ExamResult';
+
+// Practice
 import Practice from './pages/Practice';
 import PracticeSession from './pages/PracticeSession';
+
+// Profile
 import Profile from './pages/Profile';
 
-// Admin Pages
+// Admin Pages (commented out for now)
 // import AdminDashboard from './pages/admin/Dashboard';
 // import AdminUsers from './pages/admin/Users';
 // import AdminReports from './pages/admin/Reports';
@@ -36,14 +50,19 @@ function App() {
     <BrowserRouter>
       <AuthProvider>
         <Routes>
-          {/* Auth Routes */}
+          {/* ============================================ */}
+          {/* AUTH ROUTES */}
+          {/* ============================================ */}
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />  
           <Route path="/reset-password" element={<ResetPassword />} />  
 
-          {/* User Routes */}
+          {/* ============================================ */}
+          {/* USER ROUTES */}
+          {/* ============================================ */}
           <Route element={<MainLayout />}>
+            {/* Home */}
             <Route
               path="/"
               element={
@@ -52,6 +71,8 @@ function App() {
                 </ProtectedRoute>
               }
             />
+
+            {/* Upload */}
             <Route
               path="/upload"
               element={
@@ -60,6 +81,10 @@ function App() {
                 </ProtectedRoute>
               }
             />
+
+            {/* ============================================ */}
+            {/* QUESTION BANKS ROUTES */}
+            {/* ============================================ */}
             <Route
               path="/question-banks"
               element={
@@ -77,21 +102,81 @@ function App() {
               }
             />
             <Route
-              path="/create-exam/:bankId"
+              path="/question-banks/:bankId/edit-question/:questionId"
               element={
                 <ProtectedRoute>
-                  <CreateExam />
+                  <EditQuestion />
                 </ProtectedRoute>
               }
             />
             <Route
-              path="/exam/:examId"
+              path="/question-banks/:bankId/add-question"
+              element={
+                <ProtectedRoute>
+                  <AddQuestion />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* ============================================ */}
+            {/* EXAMS ROUTES */}
+            {/* ============================================ */}
+            
+            {/* Danh sách đề thi */}
+            <Route
+              path="/exams"
+              element={
+                <ProtectedRoute>
+                  <Exams />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Chi tiết đề thi */}
+            <Route
+              path="/exams/:examId"
+              element={
+                <ProtectedRoute>
+                  <ExamDetail />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Chỉnh sửa đề thi */}
+            <Route
+              path="/exams/:examId/edit"
+              element={
+                <ProtectedRoute>
+                  <ExamEdit />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* Tạo đề thi từ Question Bank */}
+            <Route
+              path="/question-banks/:bankId/create-exam"
+              element={
+                <ProtectedRoute>
+                  <CreateExamFromBank />
+                </ProtectedRoute>
+              }
+            />
+
+            {/* ============================================ */}
+            {/* TAKE EXAM ROUTES */}
+            {/* ============================================ */}
+
+            {/* Làm bài thi */}
+            <Route
+              path="/exam/:examId/take"
               element={
                 <ProtectedRoute>
                   <TakeExam />
                 </ProtectedRoute>
               }
             />
+
+            {/* Xem kết quả */}
             <Route
               path="/exam/:examId/result"
               element={
@@ -100,6 +185,10 @@ function App() {
                 </ProtectedRoute>
               }
             />
+
+            {/* ============================================ */}
+            {/* PRACTICE ROUTES */}
+            {/* ============================================ */}
             <Route
               path="/practice"
               element={
@@ -116,6 +205,10 @@ function App() {
                 </ProtectedRoute>
               }
             />
+
+            {/* ============================================ */}
+            {/* PROFILE */}
+            {/* ============================================ */}
             <Route
               path="/profile"
               element={
@@ -126,7 +219,9 @@ function App() {
             />
           </Route>
 
-          {/* Admin Routes */}
+          {/* ============================================ */}
+          {/* ADMIN ROUTES (commented out) */}
+          {/* ============================================ */}
           {/* <Route
             element={
               <ProtectedRoute requireAdmin>
@@ -140,6 +235,7 @@ function App() {
           </Route> */}
         </Routes>
 
+        {/* Toast Notifications */}
         <Toaster
           position="top-right"
           toastOptions={{

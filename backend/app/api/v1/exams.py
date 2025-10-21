@@ -1,295 +1,451 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from supabase import Client
-from app.core.supabase import get_supabase
-from app.api.deps import get_current_user, get_current_admin
-from app.models.exam import (
-    ExamCreate, ExamUpdate, ExamResponse, ExamDetailResponse,
-    QuestionCreate, QuestionResponse
-)
-from typing import List
-import uuid
+from app.core.supabase import get_supabase_admin
+from app.api.deps import get_current_user
+from typing import List, Optional
+import random
+import logging
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
-@router.post("/", response_model=ExamResponse, status_code=status.HTTP_201_CREATED)
-async def create_exam(
-    exam_data: ExamCreate,
-    current_user: dict = Depends(get_current_user),
-    supabase: Client = Depends(get_supabase)
-):
-    """
-    Tạo đề thi mới
-    """
-    try:
-        exam = {
-            "title": exam_data.title,
-            "description": exam_data.description,
-            "duration": exam_data.duration,
-            "is_published": exam_data.is_published,
-            "created_by": current_user["id"],
-            "total_marks": 0
-        }
-        
-        response = supabase.table("exams").insert(exam).execute()
-        
-        return ExamResponse(**response.data[0])
-    except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Failed to create exam: {str(e)}"
-        )
 
-@router.get("/", response_model=List[ExamResponse])
-async def get_exams(
+@router.get("/")
+async def get_all_exams(
+    is_published: Optional[bool] = None,
+    search: Optional[str] = None,
     current_user: dict = Depends(get_current_user),
-    supabase: Client = Depends(get_supabase),
-    skip: int = Query(0, ge=0),
-    limit: int = Query(50, ge=1, le=100)
+    supabase: Client = Depends(get_supabase_admin)
 ):
-    """
-    Lấy danh sách đề thi
-    - User thường: chỉ thấy đề đã publish
-    - Admin: thấy tất cả
-    """
+    """Lấy danh sách đề thi của user"""
     try:
-        query = supabase.table("exams").select("*")
+        # User chỉ thấy đề của mình
+        query = supabase.table("exams")\
+            .select("*, question_banks(name, id)")\
+            .eq("created_by", current_user["id"])
         
-        # User thường chỉ thấy đề published
-        if current_user.get("role") != "admin":
-            query = query.eq("is_published", True)
+        if is_published is not None:
+            query = query.eq("is_published", is_published)
         
-        response = query.order("created_at", desc=True)\
-            .range(skip, skip + limit - 1)\
-            .execute()
+        if search:
+            query = query.ilike("title", f"%{search}%")
         
-        # Get questions count for each exam
-        exams_with_count = []
-        for exam in response.data:
-            questions = supabase.table("questions")\
+        result = query.order("created_at", desc=True).execute()
+        
+        # Count questions for each exam
+        exams = []
+        for exam in result.data:
+            questions_count = supabase.table("exam_questions")\
                 .select("id", count="exact")\
                 .eq("exam_id", exam["id"])\
                 .execute()
             
-            exam["questions_count"] = questions.count
-            exams_with_count.append(ExamResponse(**exam))
+            exam["questions_count"] = questions_count.count
+            exams.append(exam)
         
-        return exams_with_count
+        return exams
+        
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Failed to fetch exams: {str(e)}"
-        )
+        logger.error(f"Get exams error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/{exam_id}", response_model=ExamDetailResponse)
+@router.get("/{exam_id}")
 async def get_exam_detail(
     exam_id: str,
     current_user: dict = Depends(get_current_user),
-    supabase: Client = Depends(get_supabase)
+    supabase: Client = Depends(get_supabase_admin)
 ):
-    """
-    Lấy chi tiết đề thi kèm câu hỏi
-    """
+    """Lấy chi tiết đề thi kèm câu hỏi"""
     try:
         # Get exam
-        exam_response = supabase.table("exams")\
-            .select("*")\
+        exam = supabase.table("exams")\
+            .select("*, question_banks(name, id)")\
             .eq("id", exam_id)\
             .single()\
             .execute()
         
-        if not exam_response.data:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Exam not found"
-            )
-        
-        exam = exam_response.data
+        if not exam.data:
+            raise HTTPException(status_code=404, detail="Exam not found")
         
         # Check permission
-        if current_user.get("role") != "admin" and not exam.get("is_published"):
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="You don't have permission to view this exam"
-            )
+        if exam.data["created_by"] != current_user["id"]:
+            raise HTTPException(status_code=403, detail="Access denied")
         
-        # Get questions
-        questions_response = supabase.table("questions")\
-            .select("*")\
+        # Get questions through exam_questions
+        exam_questions = supabase.table("exam_questions")\
+            .select("*, question_bank_items(*)")\
             .eq("exam_id", exam_id)\
             .order("order_index")\
             .execute()
         
-        exam["questions"] = [QuestionResponse(**q) for q in questions_response.data]
-        exam["questions_count"] = len(questions_response.data)
+        questions = [
+            {
+                **eq["question_bank_items"],
+                "exam_question_id": eq["id"],
+                "order_index": eq["order_index"],
+                "marks": eq["marks"]
+            }
+            for eq in exam_questions.data
+        ]
         
-        return ExamDetailResponse(**exam)
+        return {
+            **exam.data,
+            "questions_count": len(questions),
+            "questions": questions
+        }
+        
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Failed to get exam: {str(e)}"
-        )
+        logger.error(f"Get exam detail error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
-@router.put("/{exam_id}", response_model=ExamResponse)
-async def update_exam(
-    exam_id: str,
-    exam_data: ExamUpdate,
+@router.post("/create-from-bank")
+async def create_exam_from_question_bank(
+    data: dict,
     current_user: dict = Depends(get_current_user),
-    supabase: Client = Depends(get_supabase)
+    supabase: Client = Depends(get_supabase_admin)
 ):
     """
-    Cập nhật thông tin đề thi
+    Tạo đề thi từ ngân hàng câu hỏi - RANDOM MODE
+    
+    Body:
+    {
+        "title": "Tên đề thi",
+        "description": "Mô tả",
+        "duration_minutes": 60,
+        "question_bank_id": "uuid",
+        "question_count": 20,
+        "difficulty_filter": "medium" (optional),
+        "category_filter": "string" (optional),
+        "shuffle_questions": true,
+        "shuffle_options": true
+    }
     """
     try:
+        logger.info(f"📝 Creating exam from bank (RANDOM)...")
+        
+        # Validate required fields
+        required_fields = ["title", "duration_minutes", "question_bank_id", "question_count"]
+        for field in required_fields:
+            if field not in data:
+                raise HTTPException(status_code=400, detail=f"Missing field: {field}")
+        
+        # 1. Verify question bank
+        bank = supabase.table("question_banks")\
+            .select("*")\
+            .eq("id", data["question_bank_id"])\
+            .single()\
+            .execute()
+        
+        if not bank.data:
+            raise HTTPException(status_code=404, detail="Question bank not found")
+        
+        # Check permission
+        if bank.data['user_id'] != current_user['id'] and not bank.data['is_public']:
+            raise HTTPException(status_code=403, detail="Access denied")
+        
+        # 2. Get questions with filters
+        query = supabase.table("question_bank_items")\
+            .select("*")\
+            .eq("question_bank_id", data["question_bank_id"])
+        
+        if data.get("difficulty_filter"):
+            query = query.eq("difficulty", data["difficulty_filter"])
+        
+        if data.get("category_filter"):
+            query = query.eq("category", data["category_filter"])
+        
+        available_questions = query.execute().data
+        
+        if not available_questions:
+            raise HTTPException(status_code=400, detail="No questions found matching filters")
+        
+        # 3. Random select questions
+        question_count = data["question_count"]
+        if len(available_questions) < question_count:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Not enough questions. Available: {len(available_questions)}, Requested: {question_count}"
+            )
+        
+        selected_questions = random.sample(available_questions, question_count)
+        
+        # 4. Calculate total marks
+        total_marks = sum(q.get('marks', 1) for q in selected_questions)
+        
+        # 5. Create exam
+        exam_data = {
+            "title": data["title"],
+            "description": data.get("description"),
+            "created_by": current_user["id"],
+            "question_bank_id": data["question_bank_id"],
+            "duration_minutes": data["duration_minutes"],
+            "total_marks": total_marks,
+            "passing_marks": int(total_marks * 0.6),
+            "shuffle_questions": data.get("shuffle_questions", True),
+            "shuffle_options": data.get("shuffle_options", True),
+            "show_results_immediately": data.get("show_results_immediately", True),
+            "allow_review": data.get("allow_review", True),
+            "is_published": False
+        }
+        
+        exam_response = supabase.table("exams").insert(exam_data).execute()
+        exam_id = exam_response.data[0]["id"]
+        
+        # 6. Link questions to exam
+        exam_questions = []
+        for idx, question in enumerate(selected_questions):
+            exam_questions.append({
+                "exam_id": exam_id,
+                "question_bank_item_id": question["id"],
+                "order_index": idx,
+                "marks": question.get("marks", 1)
+            })
+        
+        supabase.table("exam_questions").insert(exam_questions).execute()
+        
+        # 7. Update question usage stats
+        for q in selected_questions:
+            supabase.table("question_bank_items")\
+                .update({"times_used": (q.get('times_used', 0) + 1)})\
+                .eq("id", q["id"])\
+                .execute()
+        
+        logger.info(f"✅ Exam created: {exam_id} with {len(selected_questions)} questions")
+        
+        return {
+            **exam_response.data[0],
+            "questions_count": len(selected_questions)
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Create exam error: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=f"Failed to create exam: {str(e)}")
+
+
+@router.post("/create-from-selected")
+async def create_exam_from_selected_questions(
+    data: dict,
+    current_user: dict = Depends(get_current_user),
+    supabase: Client = Depends(get_supabase_admin)
+):
+    """
+    Tạo đề thi từ DANH SÁCH CÂU HỎI CỤ THỂ - SELECT MODE
+    
+    Body:
+    {
+        "title": "Tên đề thi",
+        "description": "Mô tả",
+        "duration_minutes": 60,
+        "question_bank_id": "uuid",
+        "question_ids": ["uuid1", "uuid2", ...],
+        "shuffle_questions": true,
+        "shuffle_options": true
+    }
+    """
+    try:
+        logger.info(f"📝 Creating exam from selected questions...")
+        
+        # Validate required fields
+        required_fields = ["title", "duration_minutes", "question_bank_id", "question_ids"]
+        for field in required_fields:
+            if field not in data:
+                raise HTTPException(status_code=400, detail=f"Missing field: {field}")
+        
+        if not data["question_ids"] or len(data["question_ids"]) == 0:
+            raise HTTPException(status_code=400, detail="No questions selected")
+        
+        # 1. Verify question bank
+        bank = supabase.table("question_banks")\
+            .select("*")\
+            .eq("id", data["question_bank_id"])\
+            .single()\
+            .execute()
+        
+        if not bank.data:
+            raise HTTPException(status_code=404, detail="Question bank not found")
+        
+        if bank.data['user_id'] != current_user['id'] and not bank.data['is_public']:
+            raise HTTPException(status_code=403, detail="Access denied")
+        
+        # 2. Get selected questions
+        selected_questions = supabase.table("question_bank_items")\
+            .select("*")\
+            .eq("question_bank_id", data["question_bank_id"])\
+            .in_("id", data["question_ids"])\
+            .execute()
+        
+        if len(selected_questions.data) != len(data["question_ids"]):
+            raise HTTPException(status_code=400, detail="Some questions not found")
+        
+        # 3. Calculate total marks
+        total_marks = sum(q.get('marks', 1) for q in selected_questions.data)
+        
+        # 4. Create exam
+        exam_data = {
+            "title": data["title"],
+            "description": data.get("description"),
+            "created_by": current_user["id"],
+            "question_bank_id": data["question_bank_id"],
+            "duration_minutes": data["duration_minutes"],
+            "total_marks": total_marks,
+            "passing_marks": int(total_marks * 0.6),
+            "shuffle_questions": data.get("shuffle_questions", True),
+            "shuffle_options": data.get("shuffle_options", True),
+            "show_results_immediately": data.get("show_results_immediately", True),
+            "allow_review": data.get("allow_review", True),
+            "is_published": False
+        }
+        
+        exam_response = supabase.table("exams").insert(exam_data).execute()
+        exam_id = exam_response.data[0]["id"]
+        
+        # 5. Link questions to exam (preserve user's selection order)
+        exam_questions = []
+        for idx, question_id in enumerate(data["question_ids"]):
+            # Find question in selected_questions
+            question = next((q for q in selected_questions.data if q["id"] == question_id), None)
+            if question:
+                exam_questions.append({
+                    "exam_id": exam_id,
+                    "question_bank_item_id": question["id"],
+                    "order_index": idx,
+                    "marks": question.get("marks", 1)
+                })
+        
+        supabase.table("exam_questions").insert(exam_questions).execute()
+        
+        # 6. Update question usage stats
+        for q in selected_questions.data:
+            supabase.table("question_bank_items")\
+                .update({"times_used": (q.get('times_used', 0) + 1)})\
+                .eq("id", q["id"])\
+                .execute()
+        
+        logger.info(f"✅ Exam created: {exam_id} with {len(exam_questions)} questions")
+        
+        return {
+            **exam_response.data[0],
+            "questions_count": len(exam_questions)
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Create exam error: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.put("/{exam_id}")
+async def update_exam(
+    exam_id: str,
+    data: dict,
+    current_user: dict = Depends(get_current_user),
+    supabase: Client = Depends(get_supabase_admin)
+):
+    """Cập nhật đề thi"""
+    try:
         # Check ownership
-        exam = supabase.table("exams").select("*").eq("id", exam_id).single().execute()
+        exam = supabase.table("exams")\
+            .select("created_by")\
+            .eq("id", exam_id)\
+            .single()\
+            .execute()
         
-        if not exam.data:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Exam not found"
-            )
+        if not exam.data or exam.data["created_by"] != current_user["id"]:
+            raise HTTPException(status_code=403, detail="Access denied")
         
-        # Only creator or admin can update
-        if exam.data["created_by"] != current_user["id"] and current_user.get("role") != "admin":
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="You don't have permission to update this exam"
-            )
-        
-        update_data = exam_data.dict(exclude_unset=True)
-        
-        response = supabase.table("exams")\
-            .update(update_data)\
+        # Update
+        result = supabase.table("exams")\
+            .update(data)\
             .eq("id", exam_id)\
             .execute()
         
-        return ExamResponse(**response.data[0])
+        return result.data[0]
+        
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Failed to update exam: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.delete("/{exam_id}")
 async def delete_exam(
     exam_id: str,
-    current_admin: dict = Depends(get_current_admin),
-    supabase: Client = Depends(get_supabase)
+    current_user: dict = Depends(get_current_user),
+    supabase: Client = Depends(get_supabase_admin)
 ):
-    """
-    Xóa đề thi (chỉ admin)
-    """
+    """Xóa đề thi"""
     try:
-        response = supabase.table("exams").delete().eq("id", exam_id).execute()
+        # Check ownership
+        exam = supabase.table("exams")\
+            .select("created_by")\
+            .eq("id", exam_id)\
+            .single()\
+            .execute()
         
-        if not response.data:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Exam not found"
-            )
+        if not exam.data or exam.data["created_by"] != current_user["id"]:
+            raise HTTPException(status_code=403, detail="Access denied")
+        
+        # Delete (cascade will handle exam_questions)
+        supabase.table("exams").delete().eq("id", exam_id).execute()
         
         return {"message": "Exam deleted successfully"}
+        
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Failed to delete exam: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=str(e))
 
-# QUESTIONS ENDPOINTS
-
-@router.post("/{exam_id}/questions", response_model=QuestionResponse, status_code=status.HTTP_201_CREATED)
-async def add_question_to_exam(
+@router.post("/{exam_id}/publish")
+async def publish_exam(
     exam_id: str,
-    question_data: QuestionCreate,
     current_user: dict = Depends(get_current_user),
-    supabase: Client = Depends(get_supabase)
+    supabase: Client = Depends(get_supabase_admin)
 ):
-    """
-    Thêm câu hỏi vào đề thi
-    """
+    """Publish đề thi"""
     try:
-        # Check exam exists and permission
-        exam = supabase.table("exams").select("*").eq("id", exam_id).single().execute()
+        result = supabase.table("exams")\
+            .update({"is_published": True})\
+            .eq("id", exam_id)\
+            .eq("created_by", current_user["id"])\
+            .execute()
         
-        if not exam.data:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Exam not found"
-            )
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Exam not found")
         
-        if exam.data["created_by"] != current_user["id"] and current_user.get("role") != "admin":
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="You don't have permission to add questions to this exam"
-            )
+        return {"message": "Exam published successfully"}
         
-        question = {
-            "exam_id": exam_id,
-            **question_data.dict()
-        }
-        
-        response = supabase.table("questions").insert(question).execute()
-        
-        # Update total_marks
-        new_marks = exam.data["total_marks"] + question_data.marks
-        supabase.table("exams").update({"total_marks": new_marks}).eq("id", exam_id).execute()
-        
-        return QuestionResponse(**response.data[0])
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Failed to add question: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=str(e))
 
-@router.delete("/{exam_id}/questions/{question_id}")
-async def delete_question(
+@router.post("/{exam_id}/unpublish")
+async def unpublish_exam(
     exam_id: str,
-    question_id: str,
     current_user: dict = Depends(get_current_user),
-    supabase: Client = Depends(get_supabase)
+    supabase: Client = Depends(get_supabase_admin)
 ):
-    """
-    Xóa câu hỏi khỏi đề thi
-    """
+    """Unpublish đề thi"""
     try:
-        # Get question
-        question = supabase.table("questions").select("*").eq("id", question_id).single().execute()
+        result = supabase.table("exams")\
+            .update({"is_published": False})\
+            .eq("id", exam_id)\
+            .eq("created_by", current_user["id"])\
+            .execute()
         
-        if not question.data:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Question not found"
-            )
+        if not result.data:
+            raise HTTPException(status_code=404, detail="Exam not found")
         
-        # Check exam ownership
-        exam = supabase.table("exams").select("*").eq("id", exam_id).single().execute()
+        return {"message": "Exam unpublished successfully"}
         
-        if exam.data["created_by"] != current_user["id"] and current_user.get("role") != "admin":
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="You don't have permission"
-            )
-        
-        # Delete question
-        supabase.table("questions").delete().eq("id", question_id).execute()
-        
-        # Update total_marks
-        new_marks = exam.data["total_marks"] - question.data["marks"]
-        supabase.table("exams").update({"total_marks": max(0, new_marks)}).eq("id", exam_id).execute()
-        
-        return {"message": "Question deleted successfully"}
     except HTTPException:
         raise
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Failed to delete question: {str(e)}"
-        )
+        raise HTTPException(status_code=500, detail=str(e))

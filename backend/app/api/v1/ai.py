@@ -8,6 +8,7 @@ from app.models.ai import (
 )
 from app.services.chatgpt_service import chatgpt_service
 import logging
+import json
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -15,14 +16,13 @@ logger = logging.getLogger(__name__)
 @router.post("/analyze-text", response_model=AnalyzeTextResponse)
 async def analyze_text(
     data: AnalyzeTextRequest,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
+    supabase: Client = Depends(get_supabase_admin)
 ):
     """
-    Phân tích text và trích xuất câu hỏi bằng ChatGPT
+    Phân tích text và trích xuất câu hỏi
     """
     try:
-        logger.info(f"📝 Analyzing text for user: {current_user['email']}")
-        
         if not data.text.strip():
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -32,16 +32,92 @@ async def analyze_text(
         # Call ChatGPT
         result = chatgpt_service.analyze_questions(data.text, data.language)
         
+        if not result.get("questions"):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No questions found in the text"
+            )
+        
+        bank_name = result.get("exam_title") or f"Ngân hàng từ AI - {current_user['email'][:20]}"
+        bank_description = result.get("exam_description") or "Tự động tạo từ AI"
+        
+
+        logger.info(f"💾 Creating question bank...")
+        
+        bank_data = {
+            "user_id": current_user["id"],
+            "name": bank_name,
+            "description": bank_description,
+            "is_public": False
+        }
+        
+        bank_response = supabase.table("question_banks").insert(bank_data).execute()
+        bank_id = bank_response.data[0]["id"]
+    
+        questions_to_insert = []
+        allowed_types = ['multiple_choice', 'multiple_answer', 'true_false', 
+                        'short_answer', 'essay', 'fill_blank', 'ordering']
+        
+        for idx, q in enumerate(result["questions"]):
+            q_type = q.get("question_type", "multiple_choice")
+            
+            if q_type not in allowed_types:
+                logger.warning(f"Unknown question type '{q_type}', defaulting to 'multiple_choice'")
+                q_type = "multiple_choice"
+            
+            correct_ans = q["correct_answer"]
+            
+            question_item = {
+                "question_bank_id": bank_id,
+                "question_text": q["question_text"],
+                "question_type": q_type,
+                "options": q.get("options"),
+                "correct_answer": correct_ans,
+                "marks": 1,
+                "explanation": q.get("explanation"),
+                "difficulty": "medium",
+                "tags": [],
+                "times_used": 0,
+                "times_correct": 0,
+                "times_incorrect": 0
+            }
+            questions_to_insert.append(question_item)
+        
+        # Insert questions
+        questions_response = supabase.table("question_bank_items").insert(questions_to_insert).execute()
+        question_items = questions_response.data
+
+    
+        
+        # Track analytics
+        try:
+            supabase.rpc('track_action', {
+                'p_user_id': current_user['id'],
+                'p_action_type': 'ai_create_question_bank',
+                'p_metadata': {
+                    'bank_id': bank_id,
+                    'questions_count': len(question_items)
+                }
+            }).execute()
+        except Exception as analytics_error:
+            logger.warning(f"Analytics tracking failed: {str(analytics_error)}")
+            pass
+
+        result["bank_id"] = bank_id
+        result["bank_name"] = bank_name
         return AnalyzeTextResponse(**result)
         
     except HTTPException:
         raise
     except Exception as e:
         logger.error(f"❌ Analysis error: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to analyze text: {str(e)}"
         )
+
 
 @router.post("/analyze-file/{file_id}")
 async def analyze_uploaded_file(

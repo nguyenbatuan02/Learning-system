@@ -22,7 +22,7 @@ import Badge from '../components/common/Badge';
 import Alert from '../components/common/Alert';
 import toast from 'react-hot-toast';
 
-const CreateExam = () => {
+const CreateExamFromBank = () => {
   const { bankId } = useParams();
   const navigate = useNavigate();
 
@@ -38,12 +38,15 @@ const CreateExam = () => {
   const [selectionMode, setSelectionMode] = useState('random'); // random or manual
   const [selectedQuestionIds, setSelectedQuestionIds] = useState([]);
   
-  // Filters
+  // Filters - CẬP NHẬT CHO 7 LOẠI CÂU HỎI
   const [filterTypes, setFilterTypes] = useState({
     multiple_choice: true,
+    multiple_answer: true,
     true_false: true,
     short_answer: true,
     essay: true,
+    fill_blank: true,
+    ordering: true,
   });
   const [filterDifficulties, setFilterDifficulties] = useState({
     easy: true,
@@ -116,48 +119,47 @@ const CreateExam = () => {
       let selectedQuestions;
       if (selectionMode === 'random') {
         // Random selection
-        const shuffled = [...filteredQuestions].sort(() => Math.random() - 0.5);
-        selectedQuestions = shuffled.slice(0, numQuestions);
-      } else {
-        // Manual selection
-        selectedQuestions = allQuestions.filter(q => selectedQuestionIds.includes(q.id));
-      }
+        const examData = {
+            title: examTitle,
+            description: `Đề thi được tạo từ ngân hàng: ${bank.name}`,
+            duration_minutes: duration, 
+            question_bank_id: bankId,
+            question_count: numQuestions, 
+            shuffle_questions: shuffleQuestions,
+            shuffle_options: true,
+            show_results_immediately: showAnswers,
+            allow_review: allowRetake,
+            // Optional filters
+            difficulty_filter: Object.keys(filterDifficulties).filter(key => filterDifficulties[key]).length < 3
+            ? Object.keys(filterDifficulties).filter(key => filterDifficulties[key])[0]
+            : undefined,
+        };
 
-      // Create exam
-      const examData = {
-        title: examTitle,
-        description: `Đề thi được tạo từ ngân hàng: ${bank.name}`,
-        duration: duration,
-        total_marks: selectedQuestions.reduce((sum, q) => sum + (q.marks || 1), 0),
-        shuffle_questions: shuffleQuestions,
-        show_answers_after_submit: showAnswers,
-        allow_retake: allowRetake,
-        pass_percentage: passPercentage,
+        const examResponse = await examService.createFromBank(examData);
+        toast.success('Đã tạo đề thi thành công!');
+        navigate(`/exams/${examResponse.id}`);
+
+      } else {
+        const examData = {
+            title: examTitle,
+            description: `Đề thi được tạo từ ngân hàng: ${bank.name}`,
+            duration_minutes: duration,
+            question_bank_id: bankId, 
+            question_ids: selectedQuestionIds,
+            shuffle_questions: shuffleQuestions,
+            shuffle_options: true,
+            show_results_immediately: showAnswers,
+            allow_review: allowRetake,
       };
 
-      const examResponse = await examService.create(examData);
-      const examId = examResponse.id;
-
-      // Add questions to exam
-      for (let i = 0; i < selectedQuestions.length; i++) {
-        const q = selectedQuestions[i];
-        await examService.addQuestion(examId, {
-          question_text: q.question_text,
-          question_type: q.question_type,
-          options: q.options,
-          correct_answer: q.correct_answer,
-          explanation: q.explanation,
-          marks: q.marks || 1,
-          order_number: i + 1,
-        });
-      }
-
+      const examResponse = await examService.createFromSelected(examData);
       toast.success('Đã tạo đề thi thành công!');
-      navigate(`/exam/${examId}`);
-
+      navigate(`/exams/${examResponse.id}`);
+    }
+      
     } catch (error) {
       console.error('Create exam error:', error);
-      toast.error('Không thể tạo đề thi. Vui lòng thử lại.');
+      toast.error(error.response?.data?.detail || 'Không thể tạo đề thi. Vui lòng thử lại.');
     } finally {
       setCreating(false);
     }
@@ -180,8 +182,32 @@ const CreateExam = () => {
     setSelectedQuestionIds([]);
   };
 
+  // Helper function để hiển thị tên loại câu hỏi
+  const getQuestionTypeLabel = (type) => {
+    const labels = {
+      multiple_choice: 'Trắc nghiệm 1 ĐA',
+      multiple_answer: 'Trắc nghiệm nhiều ĐA',
+      true_false: 'Đúng/Sai',
+      short_answer: 'Trả lời ngắn',
+      essay: 'Tự luận',
+      fill_blank: 'Điền từ',
+      ordering: 'Sắp xếp',
+    };
+    return labels[type] || type;
+  };
+
   if (loading) {
     return <Loading fullScreen text="Đang tải..." />;
+  }
+
+  if (!bank) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <Alert type="error">
+          Không tìm thấy ngân hàng đề. Vui lòng thử lại.
+        </Alert>
+      </div>
+    );
   }
 
   const filteredQuestions = getFilteredQuestions();
@@ -208,7 +234,7 @@ const CreateExam = () => {
           🎯 Tạo Đề Thi
         </h1>
         <p className="text-gray-600">
-          Từ ngân hàng: <strong>{bank?.name}</strong>
+          Từ ngân hàng: <strong>{bank.name}</strong> ({allQuestions.length} câu hỏi)
         </p>
       </div>
 
@@ -221,35 +247,49 @@ const CreateExam = () => {
               Thông tin đề thi
             </h2>
             <div className="space-y-4">
-              <Input
-                label="Tên đề thi"
-                value={examTitle}
-                onChange={(e) => setExamTitle(e.target.value)}
-                placeholder="Nhập tên đề thi..."
-                required
-              />
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Tên đề thi <span className="text-red-500">*</span>
+                </label>
+                <Input
+                  value={examTitle}
+                  onChange={(e) => setExamTitle(e.target.value)}
+                  placeholder="Nhập tên đề thi..."
+                  required
+                />
+              </div>
               
               <div className="grid grid-cols-2 gap-4">
-                <Input
-                  label="Số câu hỏi"
-                  type="number"
-                  value={numQuestions}
-                  onChange={(e) => setNumQuestions(Math.max(1, parseInt(e.target.value) || 1))}
-                  min="1"
-                  max={filteredQuestions.length}
-                  disabled={selectionMode === 'manual'}
-                  helperText={`Tối đa: ${filteredQuestions.length} câu`}
-                  leftIcon={BookOpen}
-                />
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Số câu hỏi
+                  </label>
+                  <Input
+                    type="number"
+                    value={numQuestions}
+                    onChange={(e) => setNumQuestions(Math.max(1, parseInt(e.target.value) || 1))}
+                    min="1"
+                    max={filteredQuestions.length}
+                    disabled={selectionMode === 'manual'}
+                    leftIcon={BookOpen}
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Tối đa: {filteredQuestions.length} câu
+                  </p>
+                </div>
                 
-                <Input
-                  label="Thời gian (phút)"
-                  type="number"
-                  value={duration}
-                  onChange={(e) => setDuration(Math.max(1, parseInt(e.target.value) || 1))}
-                  min="1"
-                  leftIcon={Clock}
-                />
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Thời gian (phút)
+                  </label>
+                  <Input
+                    type="number"
+                    value={duration}
+                    onChange={(e) => setDuration(Math.max(1, parseInt(e.target.value) || 1))}
+                    min="1"
+                    leftIcon={Clock}
+                  />
+                </div>
               </div>
             </div>
           </Card>
@@ -261,27 +301,35 @@ const CreateExam = () => {
             </h2>
             
             <div className="flex space-x-4 mb-6">
-              <label className="flex-1">
+              <label className="flex items-center flex-1 p-4 border-2 rounded-lg cursor-pointer transition-colors hover:bg-gray-50" 
+                     style={{ borderColor: selectionMode === 'random' ? '#3b82f6' : '#e5e7eb' }}>
                 <input
                   type="radio"
                   name="selectionMode"
                   value="random"
                   checked={selectionMode === 'random'}
                   onChange={(e) => setSelectionMode(e.target.value)}
-                  className="mr-2"
+                  className="mr-3"
                 />
-                <span className="font-medium">Ngẫu nhiên từ ngân hàng</span>
+                <div>
+                  <p className="font-medium text-gray-900">Ngẫu nhiên</p>
+                  <p className="text-sm text-gray-500">Chọn tự động từ ngân hàng</p>
+                </div>
               </label>
-              <label className="flex-1">
+              <label className="flex items-center flex-1 p-4 border-2 rounded-lg cursor-pointer transition-colors hover:bg-gray-50"
+                     style={{ borderColor: selectionMode === 'manual' ? '#3b82f6' : '#e5e7eb' }}>
                 <input
                   type="radio"
                   name="selectionMode"
                   value="manual"
                   checked={selectionMode === 'manual'}
                   onChange={(e) => setSelectionMode(e.target.value)}
-                  className="mr-2"
+                  className="mr-3"
                 />
-                <span className="font-medium">Tự chọn câu</span>
+                <div>
+                  <p className="font-medium text-gray-900">Tự chọn</p>
+                  <p className="text-sm text-gray-500">Chọn câu hỏi thủ công</p>
+                </div>
               </label>
             </div>
 
@@ -293,10 +341,13 @@ const CreateExam = () => {
                 </label>
                 <div className="grid grid-cols-2 gap-3">
                   {[
-                    { key: 'multiple_choice', label: 'Trắc nghiệm' },
+                    { key: 'multiple_choice', label: 'Trắc nghiệm 1 ĐA' },
+                    { key: 'multiple_answer', label: 'Trắc nghiệm nhiều ĐA' },
                     { key: 'true_false', label: 'Đúng/Sai' },
                     { key: 'short_answer', label: 'Trả lời ngắn' },
                     { key: 'essay', label: 'Tự luận' },
+                    { key: 'fill_blank', label: 'Điền từ' },
+                    { key: 'ordering', label: 'Sắp xếp' },
                   ].map(type => (
                     <label key={type.key} className="flex items-center">
                       <input
@@ -306,7 +357,7 @@ const CreateExam = () => {
                           ...filterTypes,
                           [type.key]: e.target.checked
                         })}
-                        className="mr-2"
+                        className="mr-2 w-4 h-4"
                       />
                       <span className="text-sm">
                         {type.label} ({allQuestions.filter(q => q.question_type === type.key).length})
@@ -334,7 +385,7 @@ const CreateExam = () => {
                           ...filterDifficulties,
                           [diff.key]: e.target.checked
                         })}
-                        className="mr-2"
+                        className="mr-2 w-4 h-4"
                       />
                       <span className="text-sm">{diff.label}</span>
                     </label>
@@ -348,7 +399,7 @@ const CreateExam = () => {
               <div className="mt-6">
                 <div className="flex items-center justify-between mb-4">
                   <p className="text-sm text-gray-600">
-                    Đã chọn: <strong>{selectedQuestionIds.length}</strong> câu
+                    Đã chọn: <strong>{selectedQuestionIds.length}</strong> / {filteredQuestions.length} câu
                   </p>
                   <div className="space-x-2">
                     <Button
@@ -369,37 +420,48 @@ const CreateExam = () => {
                 </div>
 
                 <div className="border border-gray-200 rounded-lg max-h-96 overflow-y-auto">
-                  {filteredQuestions.map((q, index) => (
-                    <label
-                      key={q.id}
-                      className="flex items-start p-3 hover:bg-gray-50 cursor-pointer border-b last:border-b-0"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={selectedQuestionIds.includes(q.id)}
-                        onChange={() => toggleQuestionSelection(q.id)}
-                        className="mt-1 mr-3"
-                      />
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-2 mb-1">
-                          <span className="text-sm font-medium text-gray-900">
-                            Câu {index + 1}
-                          </span>
-                          <Badge variant="primary" size="sm">
-                            {q.question_type}
-                          </Badge>
-                          {q.difficulty && (
-                            <Badge size="sm">
-                              {q.difficulty}
+                  {filteredQuestions.length > 0 ? (
+                    filteredQuestions.map((q, index) => (
+                      <label
+                        key={q.id}
+                        className="flex items-start p-3 hover:bg-gray-50 cursor-pointer border-b last:border-b-0"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={selectedQuestionIds.includes(q.id)}
+                          onChange={() => toggleQuestionSelection(q.id)}
+                          className="mt-1 mr-3 w-4 h-4"
+                        />
+                        <div className="flex-1">
+                          <div className="flex items-center space-x-2 mb-1">
+                            <span className="text-sm font-medium text-gray-900">
+                              Câu {index + 1}
+                            </span>
+                            <Badge variant="primary" size="sm">
+                              {getQuestionTypeLabel(q.question_type)}
                             </Badge>
-                          )}
+                            {q.difficulty && (
+                              <Badge size="sm" variant={
+                                q.difficulty === 'easy' ? 'success' : 
+                                q.difficulty === 'hard' ? 'danger' : 'warning'
+                              }>
+                                {q.difficulty === 'easy' ? 'Dễ' : 
+                                 q.difficulty === 'medium' ? 'TB' : 'Khó'}
+                              </Badge>
+                            )}
+                            <span className="text-xs text-gray-500">{q.marks} điểm</span>
+                          </div>
+                          <p className="text-sm text-gray-700 line-clamp-2">
+                            {q.question_text}
+                          </p>
                         </div>
-                        <p className="text-sm text-gray-700 line-clamp-2">
-                          {q.question_text}
-                        </p>
-                      </div>
-                    </label>
-                  ))}
+                      </label>
+                    ))
+                  ) : (
+                    <div className="p-8 text-center text-gray-500">
+                      Không có câu hỏi nào phù hợp với bộ lọc
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -408,7 +470,7 @@ const CreateExam = () => {
           {/* Settings */}
           <Card>
             <h2 className="text-xl font-bold text-gray-900 mb-4">
-              Cài đặt
+              Cài đặt đề thi
             </h2>
             <div className="space-y-4">
               <label className="flex items-center justify-between p-3 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
@@ -480,7 +542,7 @@ const CreateExam = () => {
         <div className="space-y-6">
           {/* Summary */}
           <Card className="sticky top-4">
-            <h3 className="font-bold text-gray-900 mb-4">Tóm tắt</h3>
+            <h3 className="font-bold text-gray-900 mb-4">📊 Tóm tắt</h3>
             
             <div className="space-y-3 mb-6">
               <div className="flex justify-between text-sm">
@@ -494,26 +556,36 @@ const CreateExam = () => {
                 <span className="font-medium text-gray-900">{duration} phút</span>
               </div>
               <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Tổng điểm:</span>
+                <span className="font-medium text-gray-900">
+                  {selectionMode === 'random' 
+                    ? numQuestions 
+                    : selectedQuestionIds.reduce((sum, id) => {
+                        const q = allQuestions.find(q => q.id === id);
+                        return sum + (q?.marks || 1);
+                      }, 0)
+                  }
+                </span>
+              </div>
+              <div className="flex justify-between text-sm">
                 <span className="text-gray-600">Điểm đạt:</span>
                 <span className="font-medium text-gray-900">{passPercentage}%</span>
               </div>
             </div>
 
-            <div className="border-t pt-4 mb-6">
-              <p className="text-sm font-medium text-gray-700 mb-2">Phân bố câu hỏi:</p>
-              <div className="space-y-2">
-                {Object.entries(questionsByType).map(([type, count]) => (
-                  <div key={type} className="flex justify-between text-sm">
-                    <span className="text-gray-600">
-                      {type === 'multiple_choice' ? 'Trắc nghiệm' :
-                       type === 'true_false' ? 'Đúng/Sai' :
-                       type === 'short_answer' ? 'Trả lời ngắn' : 'Tự luận'}:
-                    </span>
-                    <span className="font-medium">{count}</span>
-                  </div>
-                ))}
+            {Object.keys(questionsByType).length > 0 && (
+              <div className="border-t pt-4 mb-6">
+                <p className="text-sm font-medium text-gray-700 mb-2">Phân bố câu hỏi:</p>
+                <div className="space-y-2">
+                  {Object.entries(questionsByType).map(([type, count]) => (
+                    <div key={type} className="flex justify-between text-sm">
+                      <span className="text-gray-600">{getQuestionTypeLabel(type)}:</span>
+                      <span className="font-medium">{count}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
+            )}
 
             <Button
               className="w-full"
@@ -522,20 +594,22 @@ const CreateExam = () => {
               onClick={handleCreateExam}
               loading={creating}
               disabled={
-                selectionMode === 'random'
-                  ? numQuestions > filteredQuestions.length
-                  : selectedQuestionIds.length === 0
+                !examTitle.trim() ||
+                (selectionMode === 'random'
+                  ? numQuestions > filteredQuestions.length || numQuestions < 1
+                  : selectedQuestionIds.length === 0)
               }
             >
               Tạo đề thi
             </Button>
           </Card>
 
-          {/* Warning */}
+          {/* Warnings */}
           {selectionMode === 'random' && numQuestions > filteredQuestions.length && (
             <Alert type="warning">
-              Không đủ câu hỏi! Hiện có {filteredQuestions.length} câu phù hợp, 
-              vui lòng giảm số lượng hoặc thay đổi bộ lọc.
+              <strong>Không đủ câu hỏi!</strong><br/>
+              Hiện có {filteredQuestions.length} câu phù hợp. 
+              Vui lòng giảm số lượng hoặc thay đổi bộ lọc.
             </Alert>
           )}
 
@@ -544,10 +618,16 @@ const CreateExam = () => {
               Vui lòng chọn ít nhất 1 câu hỏi để tạo đề thi.
             </Alert>
           )}
+
+          {filteredQuestions.length === 0 && (
+            <Alert type="warning">
+              Không có câu hỏi nào phù hợp với bộ lọc hiện tại.
+            </Alert>
+          )}
         </div>
       </div>
     </div>
   );
 };
 
-export default CreateExam;
+export default CreateExamFromBank;

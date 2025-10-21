@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional, List
+from typing import Optional, List, Dict, Union
 from datetime import datetime
 
 # Question Bank
@@ -27,9 +27,9 @@ class QuestionBankResponse(BaseModel):
 # Question Bank Item
 class QuestionBankItemCreate(BaseModel):
     question_text: str
-    question_type: str  # multiple_choice, true_false, short_answer, essay
+    question_type: str  
     options: Optional[dict] = None
-    correct_answer: str
+    correct_answer: Union[str, List[str]]
     explanation: Optional[str] = None
     difficulty: Optional[str] = None  # easy, medium, hard
     marks: int = 1
@@ -40,7 +40,7 @@ class QuestionBankItemUpdate(BaseModel):
     question_text: Optional[str] = None
     question_type: Optional[str] = None
     options: Optional[dict] = None
-    correct_answer: Optional[str] = None
+    correct_answer: Optional[Union[str, List[str]]] = None
     explanation: Optional[str] = None
     difficulty: Optional[str] = None
     marks: Optional[int] = None
@@ -53,7 +53,7 @@ class QuestionBankItemResponse(BaseModel):
     question_text: str
     question_type: str
     options: Optional[dict]
-    correct_answer: str
+    correct_answer: Union[str, List[str]]
     explanation: Optional[str]
     difficulty: Optional[str]
     marks: int

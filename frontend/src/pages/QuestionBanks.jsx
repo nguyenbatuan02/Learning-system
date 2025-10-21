@@ -159,16 +159,12 @@ const QuestionBanks = () => {
               key={bank.id}
               bank={bank}
               onView={() => navigate(`/question-banks/${bank.id}`)}
-              onEdit={() => navigate(`/question-banks/${bank.id}/edit`)}
+              onEdit={() => navigate(`/question-banks/${bank.id}`)}
               onDelete={() => {
                 setSelectedBank(bank);
                 setShowDeleteModal(true);
               }}
-              onShare={() => {
-                // TODO: Implement share modal
-                toast.success('Tính năng chia sẻ sẽ sớm có!');
-              }}
-              onCreateExam={() => navigate(`/create-exam/${bank.id}`)}
+              onCreateExam={() => navigate(`/question-banks/${bank.id}/create-exam`)}
             />
           ))}
         </div>
@@ -246,80 +242,23 @@ const QuestionBankCard = ({ bank, onView, onEdit, onDelete, onShare, onCreateExa
               {bank.description}
             </p>
           )}
-        </div>
 
-        {/* Menu */}
-        <div className="relative">
-          <button
-            onClick={() => setShowMenu(!showMenu)}
-            className="p-1 hover:bg-gray-100 rounded-lg transition-colors"
-          >
-            <MoreVertical className="h-5 w-5 text-gray-400" />
-          </button>
-
-          {showMenu && (
-            <>
-              <div
-                className="fixed inset-0 z-10"
-                onClick={() => setShowMenu(false)}
-              />
-              <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-20">
-                <button
-                  onClick={() => {
-                    onView();
-                    setShowMenu(false);
-                  }}
-                  className="w-full flex items-center space-x-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                >
-                  <Eye className="h-4 w-4" />
-                  <span>Xem chi tiết</span>
-                </button>
-                <button
-                  onClick={() => {
-                    onEdit();
-                    setShowMenu(false);
-                  }}
-                  className="w-full flex items-center space-x-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                >
-                  <Edit className="h-4 w-4" />
-                  <span>Chỉnh sửa</span>
-                </button>
-                <button
-                  onClick={() => {
-                    onShare();
-                    setShowMenu(false);
-                  }}
-                  className="w-full flex items-center space-x-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                >
-                  <Share2 className="h-4 w-4" />
-                  <span>Chia sẻ</span>
-                </button>
-                <hr className="my-1" />
-                <button
-                  onClick={() => {
-                    onDelete();
-                    setShowMenu(false);
-                  }}
-                  className="w-full flex items-center space-x-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50"
-                >
-                  <Trash2 className="h-4 w-4" />
-                  <span>Xóa</span>
-                </button>
-              </div>
-            </>
-          )}
         </div>
+         {/* Delete Button */}
+        <button
+          onClick={onDelete}
+          className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+          title="Xóa ngân hàng đề"
+        >
+          <Trash2 className="h-5 w-5" />
+        </button>
       </div>
+         
 
       {/* Stats */}
       <div className="flex items-center space-x-4 text-sm text-gray-500 mb-4">
-        <span className="flex items-center">
-          <BookOpen className="h-4 w-4 mr-1" />
-          {bank.items_count || 0} câu
-        </span>
-        <span>•</span>
         <span>
-          {new Date(bank.created_at).toLocaleDateString('vi-VN')}
+          Ngày tạo: {new Date(bank.created_at).toLocaleDateString('vi-VN')}
         </span>
       </div>
 
