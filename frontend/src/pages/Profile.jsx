@@ -16,7 +16,9 @@ import {
   Flame,
   BarChart3,
   BookOpen,
-  CheckCircle
+  CheckCircle,
+  ChevronRight,
+  X
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { statisticsService } from '../services/statisticsService';
@@ -84,7 +86,7 @@ const Profile = () => {
       
       setStats(statsData);
       setHistory(historyData);
-      setChartData(chartResponse.data || []);
+      setChartData(chartResponse || []);
       setQuestionTypeStats(typeStats || []);
     } catch (error) {
       console.error('Failed to load profile data:', error);
@@ -448,16 +450,27 @@ const OverviewTab = ({ stats, chartData }) => {
 
 // Statistics Tab
 const StatisticsTab = ({ stats, chartData, questionTypeStats }) => {
-  const pieData = questionTypeStats.map((stat, index) => ({
-    name: stat.type === 'multiple_choice' ? 'Trắc nghiệm' :
-          stat.type === 'true_false' ? 'Đúng/Sai' :
-          stat.type === 'short_answer' ? 'Trả lời ngắn' : 'Tự luận',
+  const getQuestionTypeLabel = (type) => {
+    const labels = {
+      'multiple_choice': 'Trắc nghiệm 1 đáp án',
+      'multiple_answer': 'Trắc nghiệm nhiều đáp án',
+      'true_false': 'Đúng/Sai',
+      'short_answer': 'Trả lời ngắn',
+      'essay': 'Tự luận',
+      'fill_blank': 'Điền vào chỗ trống',
+      'ordering': 'Sắp xếp thứ tự'
+    };
+    return labels[type] || type;
+  };
+
+  const pieData = questionTypeStats.map((stat) => ({
+    name: getQuestionTypeLabel(stat.question_type),
     value: stat.accuracy,
     count: stat.correct,
     total: stat.total,
   }));
 
-  const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444'];
+  const COLORS = ['#3b82f6', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6', '#ec4899', '#06b6d4'];
 
   return (
     <div className="space-y-6">
@@ -503,9 +516,7 @@ const StatisticsTab = ({ stats, chartData, questionTypeStats }) => {
               <div key={index}>
                 <div className="flex justify-between text-sm mb-2">
                   <span className="font-medium text-gray-700">
-                    {stat.type === 'multiple_choice' ? 'Trắc nghiệm' :
-                     stat.type === 'true_false' ? 'Đúng/Sai' :
-                     stat.type === 'short_answer' ? 'Trả lời ngắn' : 'Tự luận'}
+                    {getQuestionTypeLabel(stat.question_type)}
                   </span>
                   <span className="font-bold text-gray-900">
                     {stat.correct}/{stat.total} ({stat.accuracy}%)
@@ -553,6 +564,13 @@ const StatisticsTab = ({ stats, chartData, questionTypeStats }) => {
 
 // History Tab
 const HistoryTab = ({ history }) => {
+  const navigate = useNavigate();
+
+  const handleViewResult = (examId, userExamId) => {
+    navigate(`/exam/${examId}/result?userExamId=${userExamId}`);
+  };
+
+
   return (
     <div className="space-y-6">
       <Card>
@@ -560,52 +578,71 @@ const HistoryTab = ({ history }) => {
         
         {history.length > 0 ? (
           <div className="space-y-3">
-            {history.map((item, index) => (
+            {history.map((item) => (
               <div
-                key={index}
-                className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                key={item.user_exam_id}
+                className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-blue-300 transition-all cursor-pointer"
+                onClick={() => handleViewResult(item.exam_id, item.user_exam_id)}
               >
                 <div className="flex-1">
                   <h4 className="font-medium text-gray-900">{item.exam_title}</h4>
                   <div className="flex items-center space-x-4 mt-2 text-sm text-gray-500">
                     <span className="flex items-center">
                       <Calendar className="h-4 w-4 mr-1" />
-                      {new Date(item.completed_at).toLocaleDateString('vi-VN')}
+                      {new Date(item.submitted_at).toLocaleDateString('vi-VN')}
                     </span>
                     <span className="flex items-center">
                       <Clock className="h-4 w-4 mr-1" />
                       {Math.floor(item.time_spent / 60)} phút
                     </span>
+                    <p className="text-xs text-gray-500 mt-1">
+                    Điểm đạt: {item.passing_marks}/{item.max_score}
+                  </p>
                   </div>
                 </div>
                 
-                <div className="flex items-center space-x-4">
+                 <div className="flex items-center space-x-4">
                   <div className="text-right">
                     <div className={`text-2xl font-bold ${
-                      item.score >= 70 ? 'text-green-600' : 'text-red-600'
+                      item.is_passed ? 'text-green-600' : 'text-red-600'
                     }`}>
-                      {item.score.toFixed(1)}%
+                      {item.percentage.toFixed(1)}%
                     </div>
                     <p className="text-xs text-gray-500">
-                      {item.correct_answers}/{item.total_questions} đúng
+                      {item.total_score.toFixed(1)}/{item.max_score.toFixed(1)} điểm
                     </p>
                   </div>
-                  <Badge variant={item.score >= 70 ? 'success' : 'danger'}>
-                    {item.score >= 70 ? 'Đạt' : 'Chưa đạt'}
+                  
+                  <Badge variant={item.is_passed ? 'success' : 'danger'}>
+                    {item.is_passed ? (
+                      <span className="flex items-center">
+                        <CheckCircle className="h-3 w-3 mr-1" />
+                        Đạt
+                      </span>
+                    ) : (
+                      <span className="flex items-center">
+                        <X className="h-3 w-3 mr-1" />
+                        Chưa đạt
+                      </span>
+                    )}
                   </Badge>
+                  
+                  <ChevronRight className="h-5 w-5 text-gray-400 group-hover:text-blue-600 transition-colors" />
                 </div>
               </div>
             ))}
           </div>
         ) : (
           <div className="text-center py-12 text-gray-500">
-            Chưa có lịch sử làm bài
+            <BookOpen className="h-12 w-12 mx-auto mb-3 text-gray-400" />
+            <p>Chưa có lịch sử làm bài</p>
           </div>
         )}
       </Card>
     </div>
   );
 };
+     
 
 // Settings Tab
 const SettingsTab = ({ user, onEditProfile, onChangePassword }) => {

@@ -3,11 +3,17 @@ from typing import List, Optional
 from datetime import datetime
 
 class UserStats(BaseModel):
+    user_id: Optional[str] = None
     total_exams_taken: int
     total_exams_completed: int
     average_score: float
     total_time_spent: int  # seconds
     last_activity: Optional[datetime]
+    total_question_banks: int = 0
+    score_trend: float = 0
+    wrong_answers_count: int = 0
+    streak_days: int = 0
+
 
 class ExamHistoryItem(BaseModel):
     user_exam_id: str
@@ -19,6 +25,8 @@ class ExamHistoryItem(BaseModel):
     time_spent: int
     submitted_at: datetime
     status: str
+    passing_marks: float
+    is_passed: bool
 
 class ScoreDataPoint(BaseModel):
     date: str

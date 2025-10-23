@@ -44,7 +44,7 @@ const Home = () => {
 
       // Load chart data
       const chartResponse = await statisticsService.getScoresChart({ days: 30 });
-      setChartData(chartResponse.data || []);
+      setChartData(chartResponse || []);
 
       // Load recent exams
       const examsData = await examService.getAll({ limit: 5 });
@@ -56,6 +56,7 @@ const Home = () => {
       setLoading(false);
     }
   };
+
 
   if (loading) {
     return <Loading fullScreen text="Đang tải trang chủ..." />;
@@ -288,6 +289,7 @@ const Home = () => {
               </div>
             </div>
           </Card>
+
         </div>
       </div>
     </div>
