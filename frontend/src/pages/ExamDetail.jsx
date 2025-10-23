@@ -206,14 +206,6 @@ const ExamDetail = () => {
           </Button>
 
           <Button
-            variant="outline"
-            icon={Eye}
-            onClick={() => navigate(`/exam/${examId}/take`)}
-          >
-            Xem trước
-          </Button>
-
-          <Button
             variant="danger"
             icon={Trash2}
             onClick={() => setShowDeleteModal(true)}

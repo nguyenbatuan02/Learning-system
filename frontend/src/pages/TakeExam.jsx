@@ -73,7 +73,7 @@ const TakeExam = () => {
         clearInterval(autoSaveTimerRef.current);
       }
     };
-  }, [attemptId, answers]);
+  }, [attemptId, questions]);
 
   const loadExam = async () => {
     try {
@@ -135,42 +135,54 @@ const TakeExam = () => {
 
 
   const autoSave = async () => {
-  // Save to backend thay vì localStorage
-  const currentQuestion = questions[currentQuestionIndex];
-  const answer = answers[currentQuestion?.id];
-  
-  if (!answer || !attemptId) return;
+  if (!attemptId || Object.keys(answers).length === 0) return;
 
   try {
-    await submissionService.saveAnswer({
-      user_exam_id: attemptId,
-      question_id: currentQuestion.id,
-      user_answer: answer,
-    });
-  } catch (error) {
-    console.error('Auto-save error:', error);
-    // Fallback to localStorage
-    try {
-      const saveData = {
-        examId,
-        attemptId,
-        answers,
-        flaggedQuestions: Array.from(flaggedQuestions),
-        timeRemaining,
-        timestamp: Date.now(),
-      };
-      localStorage.setItem(`exam_${examId}_autosave`, JSON.stringify(saveData));
-    } catch (e) {
-      console.error('LocalStorage save error:', e);
+    // Lưu tất cả câu trả lời trong state answers
+    for (const [questionId, answer] of Object.entries(answers)) {
+      if (answer && answer !== '') {
+        const q = questions.find(q => q.id === questionId);
+        if (!q) continue;
+
+        await submissionService.saveAnswer({
+          user_exam_id: attemptId,
+          exam_question_id: q.exam_question_id,
+          user_answer: answer,
+        });
+      }
     }
+  } catch (error) {
+    // Fallback lưu vào localStorage
+    const saveData = {
+      examId,
+      attemptId,
+      answers,
+      flaggedQuestions: Array.from(flaggedQuestions),
+      timeRemaining,
+      timestamp: Date.now(),
+    };
+    localStorage.setItem(`exam_${examId}_autosave`, JSON.stringify(saveData));
   }
 };
 
-  const handleAnswerChange = (questionId, answer) => {
+  const handleAnswerChange = async (questionId, answer) => {
     setAnswers(prev => ({
       ...prev,
       [questionId]: answer,
     }));
+    if (attemptId && answer && answer !== '') {
+        try {
+            const q = questions.find(q => q.id === questionId);
+            if (!q) return;
+            await submissionService.saveAnswer({
+                user_exam_id: attemptId,
+                exam_question_id: q.exam_question_id,
+                user_answer: answer,
+            });
+        } catch (error) {
+            toast.error('Không thể lưu câu trả lời, thử lại!');
+        }
+    }
   };
 
   const toggleFlag = (questionId) => {
@@ -240,7 +252,10 @@ const TakeExam = () => {
 
   const handleAutoSubmit = async () => {
     if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
-    toast.info('⏰ Hết giờ! Đang tự động nộp bài...');
+    toast('⏰ Hết giờ! Đang tự động nộp bài...', {
+        icon: '⏰',
+        duration: 4000,
+    });
     await handleSubmit();
   };
 
@@ -601,7 +616,7 @@ const TakeExam = () => {
         }
       >
         <p className="text-gray-600">
-          Bài làm của bạn sẽ được lưu tạm. Bạn có thể tiếp tục làm bài sau.
+          Bài làm của bạn sẽ không được lưu nếu thoát bây giờ. Bạn có chắc chắn muốn thoát không?
         </p>
       </Modal>
     </div>

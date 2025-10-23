@@ -13,14 +13,14 @@ class StartExamResponse(BaseModel):
 
 class SubmitAnswerRequest(BaseModel):
     user_exam_id: str
-    question_id: str
+    exam_question_id: str
     user_answer: Union[str, List[str], Any]  
 
 class SubmitExamRequest(BaseModel):
     user_exam_id: str
 
 class QuestionResult(BaseModel):
-    question_id: str
+    exam_question_id: str
     question_text: str
     user_answer: str  
     correct_answer: str  
@@ -36,6 +36,7 @@ class ExamResultResponse(BaseModel):
     total_score: float
     max_score: float  
     percentage: float
+    passing_marks: Optional[float] = 0
     time_spent: int  # seconds
     submitted_at: datetime
     questions: List[QuestionResult]

@@ -58,7 +58,8 @@ const CreateExamFromBank = () => {
   const [shuffleQuestions, setShuffleQuestions] = useState(true);
   const [showAnswers, setShowAnswers] = useState(true);
   const [allowRetake, setAllowRetake] = useState(true);
-  const [passPercentage, setPassPercentage] = useState(70);
+  const [passingMarks, setPassingMarks] = useState(10);
+
 
   useEffect(() => {
     loadBankData();
@@ -129,6 +130,7 @@ const CreateExamFromBank = () => {
             shuffle_options: true,
             show_results_immediately: showAnswers,
             allow_review: allowRetake,
+            passing_marks: passingMarks,
             // Optional filters
             difficulty_filter: Object.keys(filterDifficulties).filter(key => filterDifficulties[key]).length < 3
             ? Object.keys(filterDifficulties).filter(key => filterDifficulties[key])[0]
@@ -150,6 +152,7 @@ const CreateExamFromBank = () => {
             shuffle_options: true,
             show_results_immediately: showAnswers,
             allow_review: allowRetake,
+            passing_marks: passingMarks,
       };
 
       const examResponse = await examService.createFromSelected(examData);
@@ -523,15 +526,15 @@ const CreateExamFromBank = () => {
 
               <div className="p-3 border border-gray-200 rounded-lg">
                 <label className="block mb-2">
-                  <span className="font-medium text-gray-900">Điểm đạt (%)</span>
-                  <p className="text-sm text-gray-500">Điểm tối thiểu để đạt</p>
+                  <span className="font-medium text-gray-900">Số câu cần đúng để đạt</span>
+                  <p className="text-sm text-gray-500">Nhập số câu cần trả lời đúng để vượt qua bài thi</p>
                 </label>
                 <Input
                   type="number"
-                  value={passPercentage}
-                  onChange={(e) => setPassPercentage(Math.min(100, Math.max(0, parseInt(e.target.value) || 0)))}
-                  min="0"
-                  max="100"
+                  value={passingMarks}
+                  onChange={(e) => setPassingMarks(Math.max(1, Math.min(numQuestions, parseInt(e.target.value) || 1)))}
+                  min="1"
+                  max={numQuestions}
                 />
               </div>
             </div>
@@ -568,8 +571,8 @@ const CreateExamFromBank = () => {
                 </span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Điểm đạt:</span>
-                <span className="font-medium text-gray-900">{passPercentage}%</span>
+                <span className="text-gray-600">Cần đúng ít nhất</span>
+                <span className="font-medium text-gray-900">{passingMarks} câu</span>
               </div>
             </div>
 

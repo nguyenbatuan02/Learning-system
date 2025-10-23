@@ -126,7 +126,7 @@ async def submit_answer(
         existing = supabase.table("user_answers")\
             .select("id")\
             .eq("user_exam_id", data.user_exam_id)\
-            .eq("question_id", data.question_id)\
+            .eq("exam_question_id", data.exam_question_id)\
             .execute()
         
         if existing.data:
@@ -139,7 +139,7 @@ async def submit_answer(
             # Insert new answer
             answer = {
                 "user_exam_id": data.user_exam_id,
-                "question_id": data.question_id,
+                "exam_question_id": data.exam_question_id,
                 "user_answer": user_answer_value
             }
             supabase.table("user_answers").insert(answer).execute()
@@ -229,7 +229,7 @@ async def submit_exam(
             .eq("user_exam_id", data.user_exam_id)\
             .execute()
         
-        answer_map = {ans["question_id"]: ans for ans in user_answers.data}
+        answer_map = {ans["exam_question_id"]: ans for ans in user_answers.data}
         
         # Grade each question
         total_score = 0
@@ -279,7 +279,7 @@ async def submit_exam(
                     .execute()
             
             results.append(QuestionResult(
-                question_id=exam_question["id"],
+                exam_question_id=exam_question["id"],
                 question_text=question["question_text"],
                 user_answer=serialize_answer(user_answer_text),
                 correct_answer=serialize_answer(question["correct_answer"]),
@@ -396,7 +396,7 @@ async def get_exam_result(
             .eq("user_exam_id", user_exam_id)\
             .execute()
         
-        answer_map = {ans["question_id"]: ans for ans in user_answers.data}
+        answer_map = {ans["exam_question_id"]: ans for ans in user_answers.data}
         
         results = []
         for exam_question in exam_questions.data:
@@ -419,7 +419,7 @@ async def get_exam_result(
                         pass
             
             results.append(QuestionResult(
-                question_id=exam_question["id"],
+                exam_question_id=exam_question["id"],
                 question_text=question.get("question_text", ""),
                 user_answer=serialize_answer(user_answer_text),
                 correct_answer=serialize_answer(question.get("correct_answer", "")),
@@ -448,6 +448,7 @@ async def get_exam_result(
             exam_title=exam_data.get("title", "Untitled Exam"),
             total_score=total_score,
             max_score=max_score,
+            passing_marks=float(exam_data.get("passing_marks", 0)),
             percentage=(total_score / max_score * 100) if max_score > 0 else 0,
             time_spent=time_spent,
             submitted_at=submitted_at,

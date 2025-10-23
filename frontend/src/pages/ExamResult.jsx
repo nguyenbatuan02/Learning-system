@@ -28,9 +28,6 @@ const ExamResult = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const userExamId = searchParams.get('userExamId');
-  console.log('🔍 ExamResult - examId:', examId);
-  console.log('🔍 ExamResult - userExamId:', userExamId);
-
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(true);
   const [expandedQuestions, setExpandedQuestions] = useState(new Set());
@@ -76,7 +73,6 @@ const ExamResult = () => {
 
   const handleCreatePracticeSession = async () => {
     try {
-      // Get wrong answer question IDs
       const wrongQuestionIds = result.answers
         .filter(a => !a.is_correct)
         .map(a => a.question_id);
@@ -116,11 +112,14 @@ const ExamResult = () => {
     );
   }
 
-  const score = result.score || 0;
+
   const correctCount = result.questions.filter(a => a.is_correct).length;
   const wrongCount = result.questions.filter(a => !a.is_correct).length;
   const totalQuestions = result.questions.length;
-  const isPassed = score >= (result.exam?.pass_percentage || 70);
+  const totalScore = result.total_score || 0;
+  const maxScore = result.max_score || 0;
+  const passingMarks = result.passing_marks || 0;
+  const isPassed = result.passed ?? (correctCount >= passingMarks);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -137,7 +136,7 @@ const ExamResult = () => {
             <p className="text-xl opacity-90 mb-6">{result.exam?.title}</p>
             
             <div className="inline-flex items-baseline space-x-2">
-              <span className="text-6xl font-bold">{score.toFixed(1)}%</span>
+              <span className="text-6xl font-bold">{totalScore}/{maxScore}</span>
               {result.previous_score && (
                 <div className="flex items-center text-lg">
                   <TrendingUp className="h-5 w-5 mr-1" />
@@ -150,7 +149,7 @@ const ExamResult = () => {
             </div>
             
             <p className="text-lg opacity-90 mt-2">
-              {isPassed ? 'Bạn đã vượt qua!' : `Cần ${result.exam?.pass_percentage || 70}% để đạt`}
+              {isPassed? `Bạn đã vượt qua!`: `Chưa đạt`}
             </p>
           </div>
         </div>
@@ -201,10 +200,7 @@ const ExamResult = () => {
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center space-x-3">
               <div className="text-left">
-                <p className="text-sm text-gray-600">Hoàn thành lúc</p>
-                <p className="font-medium text-gray-900">
-                  {new Date(result.completed_at).toLocaleString('vi-VN')}
-                </p>
+                
               </div>
             </div>
             
