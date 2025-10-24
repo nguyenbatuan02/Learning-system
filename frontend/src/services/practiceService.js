@@ -1,3 +1,4 @@
+import { get } from 'react-hook-form';
 import api from '../lib/api';
 
 export const practiceService = {
