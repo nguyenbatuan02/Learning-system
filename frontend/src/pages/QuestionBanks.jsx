@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   BookOpen, 
   Plus, 
@@ -24,64 +24,73 @@ import EmptyState from '../components/common/EmptyState';
 import Modal from '../components/common/Modal';
 import toast from 'react-hot-toast';
 
+// Import React Query
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+
+// Query key
+const QUESTION_BANKS_KEY = 'questionBanks';
+
 const QuestionBanks = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
-  const [banks, setBanks] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('all'); // all, mine, public
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [selectedBank, setSelectedBank] = useState(null);
-  const [deleteLoading, setDeleteLoading] = useState(false);
 
-  useEffect(() => {
-    loadQuestionBanks();
-  }, [filterType]);
-
-  const loadQuestionBanks = async () => {
-    try {
-      setLoading(true);
+  // React Query - Fetch question banks
+  const { data: banks = [], isLoading } = useQuery({
+    queryKey: [QUESTION_BANKS_KEY, filterType],
+    queryFn: async () => {
       const params = {};
-      
       if (filterType === 'public') {
         params.is_public = true;
       }
+      return await questionBankService.getAll(params);
+    },
+    staleTime: 2 * 60 * 1000, // 2 minutes
+  });
 
-      const data = await questionBankService.getAll(params);
-      setBanks(data);
-    } catch (error) {
-      console.error('Failed to load question banks:', error);
-      toast.error('Không thể tải danh sách ngân hàng đề');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDelete = async () => {
-    if (!selectedBank) return;
-
-    try {
-      setDeleteLoading(true);
-      await questionBankService.delete(selectedBank.id);
+  // React Query - Delete mutation
+  const deleteMutation = useMutation({
+    mutationFn: (bankId) => questionBankService.delete(bankId),
+    onSuccess: () => {
+      // Invalidate and refetch
+      queryClient.invalidateQueries({ queryKey: [QUESTION_BANKS_KEY] });
       toast.success('Đã xóa ngân hàng đề thành công');
       setShowDeleteModal(false);
       setSelectedBank(null);
-      loadQuestionBanks();
-    } catch (error) {
+    },
+    onError: (error) => {
       console.error('Delete error:', error);
       toast.error('Không thể xóa ngân hàng đề');
-    } finally {
-      setDeleteLoading(false);
+    },
+  });
+
+  const handleDelete = () => {
+    if (selectedBank) {
+      deleteMutation.mutate(selectedBank.id);
     }
   };
 
-  const filteredBanks = banks.filter(bank => 
-    bank.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    bank.description?.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Client-side filtering
+  const filteredBanks = banks.filter(bank => {
+    const matchesSearch = 
+      bank.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      bank.description?.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    // Additional filter for "mine"
+    if (filterType === 'mine') {
+      // Assuming there's a way to identify user's banks
+      // You might need to add owner_id or is_owner field
+      return matchesSearch; // Add your logic here
+    }
+    
+    return matchesSearch;
+  });
 
-  if (loading) {
+  if (isLoading) {
     return <Loading fullScreen text="Đang tải ngân hàng đề..." />;
   }
 
@@ -198,7 +207,7 @@ const QuestionBanks = () => {
             <Button
               variant="danger"
               onClick={handleDelete}
-              loading={deleteLoading}
+              loading={deleteMutation.isPending}
             >
               Xóa
             </Button>
@@ -242,9 +251,8 @@ const QuestionBankCard = ({ bank, onView, onEdit, onDelete, onShare, onCreateExa
               {bank.description}
             </p>
           )}
-
         </div>
-         {/* Delete Button */}
+        {/* Delete Button */}
         <button
           onClick={onDelete}
           className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
@@ -253,7 +261,6 @@ const QuestionBankCard = ({ bank, onView, onEdit, onDelete, onShare, onCreateExa
           <Trash2 className="h-5 w-5" />
         </button>
       </div>
-         
 
       {/* Stats */}
       <div className="flex items-center space-x-4 text-sm text-gray-500 mb-4">

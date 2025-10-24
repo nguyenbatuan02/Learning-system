@@ -19,43 +19,49 @@ import Button from '../components/common/Button';
 import Badge from '../components/common/Badge';
 import Loading from '../components/common/Loading';
 import EmptyState from '../components/common/EmptyState';
+import { useStats, useChartData, useExams } from '../hooks/useQueries';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 const Home = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
 
-  const [stats, setStats] = useState(null);
-  const [recentExams, setRecentExams] = useState([]);
-  const [chartData, setChartData] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { data: stats, isLoading: statsLoading } = useStats();
+  const { data: chartData = [], isLoading: chartLoading } = useChartData(30);
+  const { data: recentExams = [], isLoading: examsLoading } = useExams({ limit: 5 });
 
-  useEffect(() => {
-    loadDashboardData();
-  }, []);
+//   const [stats, setStats] = useState(null);
+//   const [recentExams, setRecentExams] = useState([]);
+//   const [chartData, setChartData] = useState([]);
+//   const [loading, setLoading] = useState(true);
+  const loading = statsLoading || chartLoading || examsLoading;
 
-  const loadDashboardData = async () => {
-    try {
-      setLoading(true);
+//   useEffect(() => {
+//     loadDashboardData();
+//   }, []);
+
+//   const loadDashboardData = async () => {
+//     try {
+//       setLoading(true);
       
-      // Load statistics
-      const statsData = await statisticsService.getOverview();
-      setStats(statsData);
+//       // Load statistics
+//       const statsData = await statisticsService.getOverview();
+//       setStats(statsData);
 
-      // Load chart data
-      const chartResponse = await statisticsService.getScoresChart({ days: 30 });
-      setChartData(chartResponse || []);
+//       // Load chart data
+//       const chartResponse = await statisticsService.getScoresChart({ days: 30 });
+//       setChartData(chartResponse || []);
 
-      // Load recent exams
-      const examsData = await examService.getAll({ limit: 5 });
-      setRecentExams(examsData);
+//       // Load recent exams
+//       const examsData = await examService.getAll({ limit: 5 });
+//       setRecentExams(examsData);
 
-    } catch (error) {
-      console.error('Failed to load dashboard:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+//     } catch (error) {
+//       console.error('Failed to load dashboard:', error);
+//     } finally {
+//       setLoading(false);
+//     }
+//   };
 
 
   if (loading) {

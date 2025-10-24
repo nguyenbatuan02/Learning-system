@@ -23,14 +23,17 @@ import Modal from '../components/common/Modal';
 import Input from '../components/common/Input';
 import Select from '../components/common/Select';
 import toast from 'react-hot-toast';
+import { usePracticeSuggestions, usePracticeSessions, useWeakAreas } from '../hooks/useQueries';
+import { useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '../hooks/useQueries';
 
 const Practice = () => {
   const navigate = useNavigate();
 
-  const [suggestions, setSuggestions] = useState(null);
-  const [sessions, setSessions] = useState([]);
-  const [weakAreas, setWeakAreas] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const { data: suggestions, isLoading: suggestionsLoading } = usePracticeSuggestions();
+  const { data: sessions = [], isLoading: sessionsLoading } = usePracticeSessions();
+  const { data: weakAreas = [], isLoading: weakAreasLoading } = useWeakAreas();
+
   const [showCustomModal, setShowCustomModal] = useState(false);
   const [creating, setCreating] = useState(false);
 
@@ -42,38 +45,6 @@ const Practice = () => {
     difficulty: '',
   });
 
-  useEffect(() => {
-    loadPracticeData();
-  }, []);
-
-  const loadPracticeData = async () => {
-    try {
-      setLoading(true);
-      
-      // Load suggestions (required)
-      const suggestionsData = await practiceService.getSuggestions();
-      setSuggestions(suggestionsData);
-
-      // Load sessions (optional, can fail gracefully)
-      const sessionsData = await practiceService.getSessions();
-      setSessions(Array.isArray(sessionsData) ? sessionsData : []);
-
-      // Load weak areas (optional)
-      try {
-        const weakAreasData = await statisticsService.getWeakAreas();
-        setWeakAreas(Array.isArray(weakAreasData) ? weakAreasData : []);
-      } catch (error) {
-        console.warn('No weak areas:', error);
-        setWeakAreas([]);
-      }
-      
-    } catch (error) {
-      console.error('Failed to load practice data:', error);
-      toast.error('Không thể tải dữ liệu ôn luyện');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleStartPractice = async (type) => {
     try {
@@ -123,7 +94,9 @@ const Practice = () => {
     }
   };
 
-  if (loading) {
+    const isLoading = suggestionsLoading || sessionsLoading || weakAreasLoading;
+
+  if (isLoading) {
     return <Loading fullScreen text="Đang tải..." />;
   }
 

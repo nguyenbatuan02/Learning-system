@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   FileText, 
   Plus, 
@@ -24,66 +24,75 @@ import EmptyState from '../components/common/EmptyState';
 import Modal from '../components/common/Modal';
 import toast from 'react-hot-toast';
 
+// Import React Query
+import { useExams } from '../hooks/useQueries';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { queryKeys } from '../hooks/useQueries';
+
 const Exams = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
-  const [exams, setExams] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('all'); // all, published, draft
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [selectedExam, setSelectedExam] = useState(null);
-  const [deleteLoading, setDeleteLoading] = useState(false);
 
-  useEffect(() => {
-    loadExams();
-  }, [filterType]);
+  // Build query params based on filter
+  const queryParams = {};
+  if (filterType === 'published') {
+    queryParams.is_published = true;
+  } else if (filterType === 'draft') {
+    queryParams.is_published = false;
+  }
 
-  const loadExams = async () => {
-    try {
-      setLoading(true);
-      const params = {};
-      
-      if (filterType === 'published') {
-        params.is_published = true;
-      } else if (filterType === 'draft') {
-        params.is_published = false;
-      }
+  // React Query - Fetch exams
+  const { data: exams = [], isLoading } = useExams(queryParams);
 
-      const data = await examService.getAll(params);
-      setExams(data);
-    } catch (error) {
-      console.error('Failed to load exams:', error);
-      toast.error('Không thể tải danh sách đề thi');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleDelete = async () => {
-    if (!selectedExam) return;
-
-    try {
-      setDeleteLoading(true);
-      await examService.delete(selectedExam.id);
+  // React Query - Delete mutation
+  const deleteMutation = useMutation({
+    mutationFn: (examId) => examService.delete(examId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.exams() });
       toast.success('Đã xóa đề thi thành công');
       setShowDeleteModal(false);
       setSelectedExam(null);
-      loadExams();
-    } catch (error) {
+    },
+    onError: (error) => {
       console.error('Delete error:', error);
       toast.error('Không thể xóa đề thi');
-    } finally {
-      setDeleteLoading(false);
+    },
+  });
+
+  // React Query - Publish mutation
+  const publishMutation = useMutation({
+    mutationFn: (examId) => examService.publish(examId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: queryKeys.exams() });
+      toast.success('Đã xuất bản đề thi');
+    },
+    onError: () => {
+      toast.error('Không thể xuất bản đề thi');
+    },
+  });
+
+  const handleDelete = () => {
+    if (selectedExam) {
+      deleteMutation.mutate(selectedExam.id);
     }
   };
 
+  const handlePublish = (examId) => {
+    publishMutation.mutate(examId);
+  };
+
+  // Client-side filtering for search
   const filteredExams = exams.filter(exam => 
     exam.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
     exam.description?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  if (loading) {
+  if (isLoading) {
     return <Loading fullScreen text="Đang tải đề thi..." />;
   }
 
@@ -167,15 +176,8 @@ const Exams = () => {
                 setSelectedExam(exam);
                 setShowDeleteModal(true);
               }}
-              onPublish={async () => {
-                try {
-                  await examService.publish(exam.id);
-                  toast.success('Đã xuất bản đề thi');
-                  loadExams();
-                } catch (error) {
-                  toast.error('Không thể xuất bản đề thi');
-                }
-              }}
+              onPublish={() => handlePublish(exam.id)}
+              isPublishing={publishMutation.isPending}
             />
           ))}
         </div>
@@ -209,7 +211,7 @@ const Exams = () => {
             <Button
               variant="danger"
               onClick={handleDelete}
-              loading={deleteLoading}
+              loading={deleteMutation.isPending}
             >
               Xóa
             </Button>
@@ -229,7 +231,7 @@ const Exams = () => {
 };
 
 // Exam Card Component
-const ExamCard = ({ exam, onView, onEdit, onDelete, onTake, onPublish }) => {
+const ExamCard = ({ exam, onView, onEdit, onDelete, onTake, onPublish, isPublishing }) => {
   const [showMenu, setShowMenu] = useState(false);
 
   return (
@@ -296,10 +298,11 @@ const ExamCard = ({ exam, onView, onEdit, onDelete, onTake, onPublish }) => {
                       onPublish();
                       setShowMenu(false);
                     }}
-                    className="w-full flex items-center space-x-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                    disabled={isPublishing}
+                    className="w-full flex items-center space-x-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
                   >
                     <Share2 className="h-4 w-4" />
-                    <span>Bản chính</span>
+                    <span>{isPublishing ? 'Đang xuất bản...' : 'Bản chính'}</span>
                   </button>
                 )}
                 <hr className="my-1" />
@@ -362,7 +365,7 @@ const ExamCard = ({ exam, onView, onEdit, onDelete, onTake, onPublish }) => {
           className="flex-1"
           onClick={onTake}
         >
-            Làm bài
+          Làm bài
         </Button>
       </div>
     </Card>

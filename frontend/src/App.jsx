@@ -45,221 +45,169 @@ import Profile from './pages/Profile';
 // import AdminUsers from './pages/admin/Users';
 // import AdminReports from './pages/admin/Reports';
 
+import { QueryClientProvider } from '@tanstack/react-query';
+import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
+import { queryClient } from './lib/queryClient';
+
+
 function App() {
   return (
-    <BrowserRouter>
+    <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <Routes>
-          {/* ============================================ */}
-          {/* AUTH ROUTES */}
-          {/* ============================================ */}
-          <Route path="/login" element={<Login />} />
-          <Route path="/register" element={<Register />} />
-          <Route path="/forgot-password" element={<ForgotPassword />} />  
-          <Route path="/reset-password" element={<ResetPassword />} />  
-
-          {/* ============================================ */}
-          {/* USER ROUTES */}
-          {/* ============================================ */}
-          <Route element={<MainLayout />}>
-            {/* Home */}
-            <Route
-              path="/"
-              element={
-                <ProtectedRoute>
-                  <Home />
-                </ProtectedRoute>
-              }
-            />
-
-            {/* Upload */}
-            <Route
-              path="/upload"
-              element={
-                <ProtectedRoute>
-                  <Upload />
-                </ProtectedRoute>
-              }
-            />
+        {/* 👇 THÊM BrowserRouter ở đây */}
+        <BrowserRouter>
+          <Routes>
+            {/* ============================================ */}
+            {/* AUTH ROUTES */}
+            {/* ============================================ */}
+            <Route path="/login" element={<Login />} />
+            <Route path="/register" element={<Register />} />
+            <Route path="/forgot-password" element={<ForgotPassword />} />  
+            <Route path="/reset-password" element={<ResetPassword />} />  
 
             {/* ============================================ */}
-            {/* QUESTION BANKS ROUTES */}
+            {/* USER ROUTES */}
             {/* ============================================ */}
-            <Route
-              path="/question-banks"
-              element={
-                <ProtectedRoute>
-                  <QuestionBanks />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/question-banks/:bankId"
-              element={
-                <ProtectedRoute>
-                  <QuestionBankDetail />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/question-banks/:bankId/edit-question/:questionId"
-              element={
-                <ProtectedRoute>
-                  <EditQuestion />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/question-banks/:bankId/add-question"
-              element={
-                <ProtectedRoute>
-                  <AddQuestion />
-                </ProtectedRoute>
-              }
-            />
+            <Route element={<MainLayout />}>
+              <Route
+                path="/"
+                element={
+                  <ProtectedRoute>
+                    <Home />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/upload"
+                element={
+                  <ProtectedRoute>
+                    <Upload />
+                  </ProtectedRoute>
+                }
+              />
 
-            {/* ============================================ */}
-            {/* EXAMS ROUTES */}
-            {/* ============================================ */}
-            
-            {/* Danh sách đề thi */}
-            <Route
-              path="/exams"
-              element={
-                <ProtectedRoute>
-                  <Exams />
-                </ProtectedRoute>
-              }
-            />
+              {/* QUESTION BANKS */}
+              <Route
+                path="/question-banks"
+                element={
+                  <ProtectedRoute>
+                    <QuestionBanks />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/question-banks/:bankId"
+                element={
+                  <ProtectedRoute>
+                    <QuestionBankDetail />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/question-banks/:bankId/edit-question/:questionId"
+                element={
+                  <ProtectedRoute>
+                    <EditQuestion />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/question-banks/:bankId/add-question"
+                element={
+                  <ProtectedRoute>
+                    <AddQuestion />
+                  </ProtectedRoute>
+                }
+              />
 
-            {/* Chi tiết đề thi */}
-            <Route
-              path="/exams/:examId"
-              element={
-                <ProtectedRoute>
-                  <ExamDetail />
-                </ProtectedRoute>
-              }
-            />
+              {/* EXAMS */}
+              <Route
+                path="/exams"
+                element={
+                  <ProtectedRoute>
+                    <Exams />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/exams/:examId"
+                element={
+                  <ProtectedRoute>
+                    <ExamDetail />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/exams/:examId/edit"
+                element={
+                  <ProtectedRoute>
+                    <ExamEdit />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/question-banks/:bankId/create-exam"
+                element={
+                  <ProtectedRoute>
+                    <CreateExamFromBank />
+                  </ProtectedRoute>
+                }
+              />
 
-            {/* Chỉnh sửa đề thi */}
-            <Route
-              path="/exams/:examId/edit"
-              element={
-                <ProtectedRoute>
-                  <ExamEdit />
-                </ProtectedRoute>
-              }
-            />
+              {/* TAKE EXAM */}
+              <Route
+                path="/exam/:examId/take"
+                element={
+                  <ProtectedRoute>
+                    <TakeExam />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/exam/:examId/result"
+                element={
+                  <ProtectedRoute>
+                    <ExamResult />
+                  </ProtectedRoute>
+                }
+              />
 
-            {/* Tạo đề thi từ Question Bank */}
-            <Route
-              path="/question-banks/:bankId/create-exam"
-              element={
-                <ProtectedRoute>
-                  <CreateExamFromBank />
-                </ProtectedRoute>
-              }
-            />
+              {/* PRACTICE */}
+              <Route
+                path="/practice"
+                element={
+                  <ProtectedRoute>
+                    <Practice />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/practice/:sessionId"
+                element={
+                  <ProtectedRoute>
+                    <PracticeSession />
+                  </ProtectedRoute>
+                }
+              />
 
-            {/* ============================================ */}
-            {/* TAKE EXAM ROUTES */}
-            {/* ============================================ */}
+              {/* PROFILE */}
+              <Route
+                path="/profile"
+                element={
+                  <ProtectedRoute>
+                    <Profile />
+                  </ProtectedRoute>
+                }
+              />
+            </Route>
+          </Routes>
 
-            {/* Làm bài thi */}
-            <Route
-              path="/exam/:examId/take"
-              element={
-                <ProtectedRoute>
-                  <TakeExam />
-                </ProtectedRoute>
-              }
-            />
-
-            {/* Xem kết quả */}
-            <Route
-              path="/exam/:examId/result"
-              element={
-                <ProtectedRoute>
-                  <ExamResult />
-                </ProtectedRoute>
-              }
-            />
-
-            {/* ============================================ */}
-            {/* PRACTICE ROUTES */}
-            {/* ============================================ */}
-            <Route
-              path="/practice"
-              element={
-                <ProtectedRoute>
-                  <Practice />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/practice/:sessionId"
-              element={
-                <ProtectedRoute>
-                  <PracticeSession />
-                </ProtectedRoute>
-              }
-            />
-
-            {/* ============================================ */}
-            {/* PROFILE */}
-            {/* ============================================ */}
-            <Route
-              path="/profile"
-              element={
-                <ProtectedRoute>
-                  <Profile />
-                </ProtectedRoute>
-              }
-            />
-          </Route>
-
-          {/* ============================================ */}
-          {/* ADMIN ROUTES (commented out) */}
-          {/* ============================================ */}
-          {/* <Route
-            element={
-              <ProtectedRoute requireAdmin>
-                <AdminLayout />
-              </ProtectedRoute>
-            }
-          >
-            <Route path="/admin" element={<AdminDashboard />} />
-            <Route path="/admin/users" element={<AdminUsers />} />
-            <Route path="/admin/reports" element={<AdminReports />} />
-          </Route> */}
-        </Routes>
-
-        {/* Toast Notifications */}
-        <Toaster
-          position="top-right"
-          toastOptions={{
-            duration: 4000,
-            style: {
-              background: '#fff',
-              color: '#333',
-            },
-            success: {
-              iconTheme: {
-                primary: '#10b981',
-                secondary: '#fff',
-              },
-            },
-            error: {
-              iconTheme: {
-                primary: '#ef4444',
-                secondary: '#fff',
-              },
-            },
-          }}
-        />
+          {/* Toast Notifications */}
+          <Toaster position="top-right" />
+        </BrowserRouter>
       </AuthProvider>
-    </BrowserRouter>
+      <ReactQueryDevtools initialIsOpen={false} />
+    </QueryClientProvider>
   );
 }
 

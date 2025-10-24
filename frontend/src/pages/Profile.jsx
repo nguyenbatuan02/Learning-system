@@ -21,7 +21,6 @@ import {
   X
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
-import { statisticsService } from '../services/statisticsService';
 import { authService } from '../services/authService';
 import Card from '../components/common/Card';
 import Button from '../components/common/Button';
@@ -33,16 +32,25 @@ import Alert from '../components/common/Alert';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import toast from 'react-hot-toast';
 
+// Import React Query hooks
+import { 
+  useStats, 
+  useHistory, 
+  useChartData, 
+  useQuestionTypes 
+} from '../hooks/useQueries';
+
 const Profile = () => {
   const { user, logout, updateUser } = useAuth();
   const navigate = useNavigate();
 
   const [activeTab, setActiveTab] = useState('overview');
-  const [stats, setStats] = useState(null);
-  const [history, setHistory] = useState([]);
-  const [chartData, setChartData] = useState([]);
-  const [questionTypeStats, setQuestionTypeStats] = useState([]);
-  const [loading, setLoading] = useState(true);
+  
+  // React Query hooks
+  const { data: stats, isLoading: statsLoading } = useStats();
+  const { data: history = [], isLoading: historyLoading } = useHistory(10);
+  const { data: chartData = [], isLoading: chartLoading } = useChartData(30);
+  const { data: questionTypeStats = [], isLoading: typeStatsLoading } = useQuestionTypes();
   
   // Edit Profile Modal
   const [showEditModal, setShowEditModal] = useState(false);
@@ -62,10 +70,6 @@ const Profile = () => {
   const [passwordLoading, setPasswordLoading] = useState(false);
 
   useEffect(() => {
-    loadProfileData();
-  }, []);
-
-  useEffect(() => {
     if (user) {
       setEditForm({
         full_name: user.full_name || '',
@@ -73,28 +77,6 @@ const Profile = () => {
       });
     }
   }, [user]);
-
-  const loadProfileData = async () => {
-    try {
-      setLoading(true);
-      const [statsData, historyData, chartResponse, typeStats] = await Promise.all([
-        statisticsService.getOverview(),
-        statisticsService.getHistory({ limit: 10 }),
-        statisticsService.getScoresChart({ days: 30 }),
-        statisticsService.getQuestionTypes(),
-      ]);
-      
-      setStats(statsData);
-      setHistory(historyData);
-      setChartData(chartResponse || []);
-      setQuestionTypeStats(typeStats || []);
-    } catch (error) {
-      console.error('Failed to load profile data:', error);
-      toast.error('Không thể tải thông tin hồ sơ');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleEditProfile = async () => {
     try {
@@ -110,15 +92,15 @@ const Profile = () => {
       });
 
       const { data: authData, error: authError } = await supabase.auth.updateUser({
-      data: {
-        full_name: editForm.full_name
-      }
-    })
+        data: {
+          full_name: editForm.full_name
+        }
+      });
     
-    if (authError) {
-      console.error('❌ [3] Auth update error:', authError)
-      throw authError
-    }
+      if (authError) {
+        console.error('❌ [3] Auth update error:', authError);
+        throw authError;
+      }
 
       updateUser(updatedUser);
       toast.success('Cập nhật thông tin thành công!');
@@ -174,7 +156,15 @@ const Profile = () => {
     navigate('/login');
   };
 
-  if (loading) {
+  // Determine loading state based on active tab
+  const isLoading = () => {
+    if (activeTab === 'overview') return statsLoading || chartLoading;
+    if (activeTab === 'statistics') return statsLoading || chartLoading || typeStatsLoading;
+    if (activeTab === 'history') return historyLoading;
+    return false;
+  };
+
+  if (isLoading()) {
     return <Loading fullScreen text="Đang tải hồ sơ..." />;
   }
 
@@ -209,9 +199,6 @@ const Profile = () => {
               </div>
             </div>
           </div>
-
-    
-
         </div>
       </div>
 
@@ -407,7 +394,7 @@ const OverviewTab = ({ stats, chartData }) => {
         <h3 className="text-lg font-bold text-gray-900 mb-6">
           📈 Biểu đồ tiến độ (30 ngày)
         </h3>
-        {chartData.length > 0 ? (
+        {chartData && chartData.length > 0 ? (
           <ResponsiveContainer width="100%" height={300}>
             <LineChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
@@ -542,7 +529,7 @@ const StatisticsTab = ({ stats, chartData, questionTypeStats }) => {
         <h3 className="text-lg font-bold text-gray-900 mb-6">
           📈 Phân bố điểm số
         </h3>
-        {chartData.length > 0 ? (
+        {chartData && chartData.length > 0 ? (
           <ResponsiveContainer width="100%" height={300}>
             <BarChart data={chartData}>
               <CartesianGrid strokeDasharray="3 3" />
@@ -570,13 +557,12 @@ const HistoryTab = ({ history }) => {
     navigate(`/exam/${examId}/result?userExamId=${userExamId}`);
   };
 
-
   return (
     <div className="space-y-6">
       <Card>
         <h3 className="text-lg font-bold text-gray-900 mb-4">📜 Lịch sử làm bài</h3>
         
-        {history.length > 0 ? (
+        {history && history.length > 0 ? (
           <div className="space-y-3">
             {history.map((item) => (
               <div
@@ -596,12 +582,12 @@ const HistoryTab = ({ history }) => {
                       {Math.floor(item.time_spent / 60)} phút
                     </span>
                     <p className="text-xs text-gray-500 mt-1">
-                    Điểm đạt: {item.passing_marks}/{item.max_score}
-                  </p>
+                      Điểm đạt: {item.passing_marks}/{item.max_score}
+                    </p>
                   </div>
                 </div>
                 
-                 <div className="flex items-center space-x-4">
+                <div className="flex items-center space-x-4">
                   <div className="text-right">
                     <div className={`text-2xl font-bold ${
                       item.is_passed ? 'text-green-600' : 'text-red-600'
@@ -642,7 +628,6 @@ const HistoryTab = ({ history }) => {
     </div>
   );
 };
-     
 
 // Settings Tab
 const SettingsTab = ({ user, onEditProfile, onChangePassword }) => {
