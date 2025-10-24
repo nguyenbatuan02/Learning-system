@@ -41,9 +41,7 @@ import PracticeSession from './pages/PracticeSession';
 import Profile from './pages/Profile';
 
 // Admin Pages (commented out for now)
-// import AdminDashboard from './pages/admin/Dashboard';
-// import AdminUsers from './pages/admin/Users';
-// import AdminReports from './pages/admin/Reports';
+import AdminAnalytics from './pages/adminAnalytics';
 
 import { QueryClientProvider } from '@tanstack/react-query';
 import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
@@ -85,6 +83,7 @@ function App() {
                   </ProtectedRoute>
                 }
               />
+
 
               {/* QUESTION BANKS */}
               <Route
@@ -196,6 +195,17 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <Profile />
+                  </ProtectedRoute>
+                }
+              />
+               {/* ============================================ */}
+              {/* ADMIN ROUTES (Vẫn dùng MainLayout) */}
+              {/* ============================================ */}
+              <Route
+                path="/admin"
+                element={
+                  <ProtectedRoute requireAdmin={true}>
+                    <AdminAnalytics />
                   </ProtectedRoute>
                 }
               />
