@@ -9,7 +9,8 @@ import {
   Clock,
   CheckCircle,
   Play,
-  BarChart3
+  BarChart3,
+  AlertCircle
 } from 'lucide-react';
 import { practiceService } from '../services/practiceService';
 import { statisticsService } from '../services/statisticsService';
@@ -48,15 +49,24 @@ const Practice = () => {
   const loadPracticeData = async () => {
     try {
       setLoading(true);
-      const [suggestionsData, sessionsData, weakAreasData] = await Promise.all([
-        practiceService.getSuggestions(),
-        practiceService.getSessions(),
-        statisticsService.getWeakAreas(),
-      ]);
       
+      // Load suggestions (required)
+      const suggestionsData = await practiceService.getSuggestions();
       setSuggestions(suggestionsData);
-      setSessions(sessionsData);
-      setWeakAreas(weakAreasData);
+
+      // Load sessions (optional, can fail gracefully)
+      const sessionsData = await practiceService.getSessions();
+      setSessions(Array.isArray(sessionsData) ? sessionsData : []);
+
+      // Load weak areas (optional)
+      try {
+        const weakAreasData = await statisticsService.getWeakAreas();
+        setWeakAreas(Array.isArray(weakAreasData) ? weakAreasData : []);
+      } catch (error) {
+        console.warn('No weak areas:', error);
+        setWeakAreas([]);
+      }
+      
     } catch (error) {
       console.error('Failed to load practice data:', error);
       toast.error('Không thể tải dữ liệu ôn luyện');
@@ -67,15 +77,20 @@ const Practice = () => {
 
   const handleStartPractice = async (type) => {
     try {
+      toast.loading('Đang tạo bài ôn luyện...', { id: 'create-practice' });
+      
       const session = await practiceService.createSession({
         session_type: type,
+        num_questions: 15 // Default number of questions
       });
       
-      toast.success('Đã tạo bài ôn luyện!');
+      toast.success('Đã tạo bài ôn luyện!', { id: 'create-practice' });
       navigate(`/practice/${session.id}`);
     } catch (error) {
       console.error('Failed to create practice:', error);
-      toast.error('Không thể tạo bài ôn luyện');
+      toast.error(error.response?.data?.detail || 'Không thể tạo bài ôn luyện', { 
+        id: 'create-practice' 
+      });
     }
   };
 
@@ -91,13 +106,14 @@ const Practice = () => {
 
       const session = await practiceService.createSession({
         session_type: 'custom',
-        question_bank_ids: customForm.questionBankIds,
+        question_ids: customForm.questionBankIds,
         num_questions: customForm.numQuestions,
         categories: customForm.categories,
         difficulty: customForm.difficulty,
       });
       
       toast.success('Đã tạo bài ôn luyện!');
+      setShowCustomModal(false);
       navigate(`/practice/${session.id}`);
     } catch (error) {
       console.error('Failed to create custom practice:', error);
@@ -131,7 +147,9 @@ const Practice = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Wrong Answers */}
               <Card 
-                className="bg-gradient-to-br from-red-50 to-red-100 border-red-200 hover:shadow-lg transition-shadow cursor-pointer"
+                className={`bg-gradient-to-br from-red-50 to-red-100 border-red-200 hover:shadow-lg transition-shadow ${
+                  wrongAnswersCount > 0 ? 'cursor-pointer' : 'opacity-60'
+                }`}
                 onClick={() => wrongAnswersCount > 0 && handleStartPractice('wrong_answers')}
               >
                 <div className="flex items-start space-x-4">
@@ -158,7 +176,9 @@ const Practice = () => {
 
               {/* Weak Topics */}
               <Card 
-                className="bg-gradient-to-br from-yellow-50 to-yellow-100 border-yellow-200 hover:shadow-lg transition-shadow cursor-pointer"
+                className={`bg-gradient-to-br from-yellow-50 to-yellow-100 border-yellow-200 hover:shadow-lg transition-shadow ${
+                  weakTopicsCount > 0 ? 'cursor-pointer' : 'opacity-60'
+                }`}
                 onClick={() => weakTopicsCount > 0 && handleStartPractice('weak_topics')}
               >
                 <div className="flex items-start space-x-4">
@@ -169,7 +189,7 @@ const Practice = () => {
                     <h3 className="font-bold text-yellow-900 mb-2">Luyện điểm yếu</h3>
                     <p className="text-sm text-yellow-800 mb-4">
                       {weakTopicsCount > 0 ? (
-                        <>Tập trung vào <strong>{weakTopicsCount} chủ đề</strong> cần cải thiện</>
+                        <>Tập trung vào <strong>{weakTopicsCount} loại câu</strong> cần cải thiện</>
                       ) : (
                         'Chưa phát hiện điểm yếu'
                       )}
@@ -183,47 +203,6 @@ const Practice = () => {
                 </div>
               </Card>
 
-              {/* Random Practice */}
-              <Card 
-                className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200 hover:shadow-lg transition-shadow cursor-pointer"
-                onClick={() => navigate('/question-banks')}
-              >
-                <div className="flex items-start space-x-4">
-                  <div className="w-12 h-12 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
-                    <Shuffle className="h-6 w-6 text-white" />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-bold text-blue-900 mb-2">Luyện ngẫu nhiên</h3>
-                    <p className="text-sm text-blue-800 mb-4">
-                      Chọn câu hỏi ngẫu nhiên từ ngân hàng đề
-                    </p>
-                    <Button size="sm">
-                      Chọn ngân hàng →
-                    </Button>
-                  </div>
-                </div>
-              </Card>
-
-              {/* Custom Practice */}
-              <Card 
-                className="bg-gradient-to-br from-purple-50 to-purple-100 border-purple-200 hover:shadow-lg transition-shadow cursor-pointer"
-                onClick={() => setShowCustomModal(true)}
-              >
-                <div className="flex items-start space-x-4">
-                  <div className="w-12 h-12 bg-purple-500 rounded-full flex items-center justify-center flex-shrink-0">
-                    <Settings className="h-6 w-6 text-white" />
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="font-bold text-purple-900 mb-2">Tùy chỉnh</h3>
-                    <p className="text-sm text-purple-800 mb-4">
-                      Tự chọn câu hỏi và cấu hình bài luyện
-                    </p>
-                    <Button size="sm" className="bg-purple-600 hover:bg-purple-700">
-                      Cấu hình →
-                    </Button>
-                  </div>
-                </div>
-              </Card>
             </div>
           </div>
 
@@ -232,42 +211,60 @@ const Practice = () => {
             <Card>
               <h2 className="text-xl font-bold text-gray-900 mb-4">📊 Phân tích điểm yếu</h2>
               <div className="space-y-3">
-                {weakAreas.map((area, index) => (
+                {weakAreas.slice(0, 5).map((area, index) => (
                   <div
                     key={index}
                     className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
                   >
                     <div className="flex-1">
-                      <p className="font-medium text-gray-900">{area.topic}</p>
+                      <p className="font-medium text-gray-900 line-clamp-2">
+                        {area.question_text}
+                      </p>
                       <p className="text-sm text-gray-500 mt-1">
-                        {area.correct}/{area.total} câu đúng ({area.accuracy}%)
+                        {area.times_correct}/{area.times_attempted} câu đúng ({area.accuracy}%)
                       </p>
                     </div>
-                    <div className="flex items-center space-x-4">
+                    <div className="flex items-center space-x-4 ml-4">
                       <div className="text-right">
-                        <div className="text-2xl font-bold text-red-600">{area.accuracy}%</div>
+                        <div className={`text-2xl font-bold ${
+                          area.accuracy < 50 ? 'text-red-600' :
+                          area.accuracy < 70 ? 'text-yellow-600' :
+                          'text-green-600'
+                        }`}>
+                          {area.accuracy}%
+                        </div>
                         <p className="text-xs text-gray-500">Độ chính xác</p>
                       </div>
-                      <Badge variant="danger" size="sm">
-                        Cần cải thiện
+                      <Badge 
+                        variant={
+                          area.accuracy < 50 ? 'danger' :
+                          area.accuracy < 70 ? 'warning' :
+                          'success'
+                        } 
+                        size="sm"
+                      >
+                        {area.accuracy < 50 ? 'Rất yếu' :
+                         area.accuracy < 70 ? 'Cần cải thiện' :
+                         'Khá tốt'}
                       </Badge>
                     </div>
                   </div>
                 ))}
               </div>
+              {weakAreas.length > 5 && (
+                <Button 
+                  variant="ghost" 
+                  className="w-full mt-4"
+                  onClick={() => navigate('/statistics')}
+                >
+                  Xem tất cả {weakAreas.length} câu yếu →
+                </Button>
+              )}
             </Card>
           )}
 
           {/* Practice History */}
           <Card>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-gray-900">📜 Lịch sử ôn luyện</h2>
-              {sessions.length > 3 && (
-                <Button variant="ghost" size="sm">
-                  Xem tất cả →
-                </Button>
-              )}
-            </div>
             
             {sessions.length > 0 ? (
               <div className="space-y-3">
@@ -284,6 +281,8 @@ const Practice = () => {
                 icon={BookOpen}
                 title="Chưa có lịch sử ôn luyện"
                 description="Bắt đầu ôn luyện để cải thiện kết quả"
+                action={() => handleStartPractice('weak_topics')}
+                actionLabel="Bắt đầu ôn luyện"
               />
             )}
           </Card>
@@ -291,41 +290,36 @@ const Practice = () => {
 
         {/* Sidebar */}
         <div className="space-y-6">
-          {/* Tips */}
-          <Card className="bg-gradient-to-br from-green-50 to-green-100 border-green-200">
-            <div className="flex items-start space-x-3">
-              <div className="text-3xl">💡</div>
-              <div>
-                <h3 className="font-bold text-green-900 mb-2">Mẹo ôn luyện hiệu quả</h3>
-                <ul className="text-sm text-green-800 space-y-2">
-                  <li>• Ôn lại câu sai thường xuyên</li>
-                  <li>• Tập trung vào điểm yếu</li>
-                  <li>• Luyện tập đều đặn mỗi ngày</li>
-                  <li>• Xem kỹ giải thích đáp án</li>
-                </ul>
+          {/* Quick Stats */}
+          <Card>
+            <h2 className="text-lg font-bold text-gray-900 mb-4">📈 Thống kê</h2>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600">Câu sai</span>
+                <span className="text-lg font-bold text-red-600">{wrongAnswersCount}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600">Loại câu yếu</span>
+                <span className="text-lg font-bold text-yellow-600">{weakTopicsCount}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-gray-600">Đã ôn luyện</span>
+                <span className="text-lg font-bold text-green-600">{sessions.length}</span>
               </div>
             </div>
           </Card>
 
-          {/* Stats */}
-          <Card>
-            <h3 className="font-bold text-gray-900 mb-4">Thống kê</h3>
-            <div className="space-y-3">
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Tổng bài ôn:</span>
-                <span className="font-medium text-gray-900">{sessions.length}</span>
+          {/* Tips */}
+          <Card className="bg-gradient-to-br from-blue-50 to-blue-100 border-blue-200">
+            <div className="flex items-start space-x-3">
+              <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
+                <AlertCircle className="h-5 w-5 text-white" />
               </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Hoàn thành:</span>
-                <span className="font-medium text-gray-900">
-                  {sessions.filter(s => s.status === 'completed').length}
-                </span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-600">Đang làm:</span>
-                <span className="font-medium text-gray-900">
-                  {sessions.filter(s => s.status === 'in_progress').length}
-                </span>
+              <div className="flex-1">
+                <h3 className="font-semibold text-blue-900 mb-1">💡 Mẹo học tập</h3>
+                <p className="text-sm text-blue-800">
+                  Ôn luyện đều đặn 15-20 phút mỗi ngày sẽ giúp bạn ghi nhớ tốt hơn!
+                </p>
               </div>
             </div>
           </Card>
@@ -357,6 +351,7 @@ const Practice = () => {
             onChange={(e) => setCustomForm({ ...customForm, numQuestions: parseInt(e.target.value) || 10 })}
             min="1"
             max="50"
+            helperText="Từ 1 đến 50 câu"
           />
 
           <Select
@@ -399,18 +394,19 @@ const Practice = () => {
 const PracticeSessionCard = ({ session, onClick }) => {
   const getSessionTypeLabel = (type) => {
     const labels = {
-      wrong_answers: 'Ôn câu sai',
-      weak_topics: 'Luyện điểm yếu',
-      custom: 'Tùy chỉnh',
+      wrong_answers: '❌ Ôn câu sai',
+      weak_topics: '🎯 Luyện điểm yếu',
+      custom: '⚙️ Tùy chỉnh',
+      random: '🎲 Ngẫu nhiên'
     };
     return labels[type] || type;
   };
 
   const getStatusBadge = (status) => {
     if (status === 'completed') {
-      return <Badge variant="success">Hoàn thành</Badge>;
+      return <Badge variant="success">✓ Hoàn thành</Badge>;
     }
-    return <Badge variant="warning">Đang làm</Badge>;
+    return <Badge variant="warning">⏳ Đang làm</Badge>;
   };
 
   const progress = session.completed_question_ids?.length || 0;
@@ -420,11 +416,11 @@ const PracticeSessionCard = ({ session, onClick }) => {
   return (
     <div
       onClick={onClick}
-      className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50 transition-all cursor-pointer"
+      className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:border-blue-300 hover:bg-blue-50 transition-all cursor-pointer group"
     >
       <div className="flex-1">
         <div className="flex items-center space-x-3 mb-2">
-          <h3 className="font-medium text-gray-900">
+          <h3 className="font-medium text-gray-900 group-hover:text-blue-600 transition-colors">
             {getSessionTypeLabel(session.session_type)}
           </h3>
           {getStatusBadge(session.status)}
@@ -441,8 +437,12 @@ const PracticeSessionCard = ({ session, onClick }) => {
           <span>{new Date(session.started_at).toLocaleDateString('vi-VN')}</span>
         </div>
 
-        {session.status === 'in_progress' && (
-          <div className="mt-2">
+        {session.status === 'in_progress' && total > 0 && (
+          <div className="mt-3">
+            <div className="flex items-center justify-between text-xs text-gray-600 mb-1">
+              <span>Tiến độ</span>
+              <span>{percentage}%</span>
+            </div>
             <div className="w-full bg-gray-200 rounded-full h-2">
               <div
                 className="bg-blue-600 h-2 rounded-full transition-all"
@@ -457,6 +457,7 @@ const PracticeSessionCard = ({ session, onClick }) => {
         size="sm"
         variant={session.status === 'completed' ? 'outline' : 'primary'}
         icon={session.status === 'completed' ? CheckCircle : Play}
+        className="ml-4"
       >
         {session.status === 'completed' ? 'Xem lại' : 'Tiếp tục'}
       </Button>
