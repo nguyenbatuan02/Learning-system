@@ -372,7 +372,7 @@ const OverviewTab = ({ stats, chartData }) => {
             <TrendingUp className="h-5 w-5 text-yellow-600" />
           </div>
           <p className="text-3xl font-bold text-gray-900">
-            {stats?.average_score?.toFixed(1) || 0}%
+            {stats?.average_score?.toFixed(1) || 0}
           </p>
           <p className="text-sm text-gray-500 mt-1">Trung bình</p>
         </Card>

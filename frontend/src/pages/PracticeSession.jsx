@@ -778,7 +778,7 @@ const QuestionContent = ({ question, answer, onAnswerChange, disabled, showCorre
       return (
         <div className="space-y-4">
           <p className="text-sm text-gray-600 mb-3">
-            ⬜ Điền vào các chỗ trống
+            ⬜ Điền vào các chỗ trống cách nhau bởi dấu phẩy
           </p>
           {blanksArray.map((blank, index) => (
             <div key={index}>

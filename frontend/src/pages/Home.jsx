@@ -113,7 +113,7 @@ const Home = () => {
               <p className="text-sm font-medium text-gray-600">Điểm TB</p>
               <div className="flex items-baseline space-x-2">
                 <p className="text-3xl font-bold text-gray-900 mt-1">
-                  {stats?.average_score?.toFixed(1) || 0}%
+                  {stats?.average_score?.toFixed(1) || 0}
                 </p>
                 {stats?.score_trend > 0 && (
                   <div className="flex items-center text-green-600">

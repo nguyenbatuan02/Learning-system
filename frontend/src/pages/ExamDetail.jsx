@@ -135,9 +135,7 @@ const ExamDetail = () => {
         <div className="flex-1">
           <div className="flex items-center space-x-3 mb-3">
             <h1 className="text-3xl font-bold text-gray-900">{exam.title}</h1>
-            <Badge variant={exam.is_published ? 'success' : 'default'}>
-              {exam.is_published ? 'Đã xuất bản' : 'Nháp'}
-            </Badge>
+
           </div>
           
           {exam.description && (

@@ -9,7 +9,6 @@ class ChatGPTService:
     def __init__(self):
         self.client = OpenAI(api_key=settings.OPENAI_API_KEY)
         self.model = "gpt-5-nano"  
-        
     def analyze_questions(self, text: str, language: str = "vi") -> dict:
         """
         Phân tích text và trích xuất câu hỏi đa dạng
@@ -216,12 +215,118 @@ IMPORTANT NOTES:
     
     # Các method khác giữ nguyên...
     def generate_similar_questions(self, question: str, count: int = 3) -> list:
-        # Code cũ giữ nguyên
-        pass
+        """
+        Tạo các câu hỏi tương tự
+        """
+        try:
+            logger.info(f"🤖 Generating {count} similar questions...")
+            
+            prompt = f"""
+Dựa trên câu hỏi sau, hãy tạo {count} câu hỏi tương tự (cùng chủ đề, khác nội dung):
+
+CÂU HỎI GỐC:
+{question}
+
+YÊU CẦU:
+- Tạo {count} câu hỏi mới, khác nhau
+- Giữ nguyên độ khó
+- Cùng định dạng trắc nghiệm
+- Có đáp án đúng rõ ràng
+
+ĐỊNH DẠNG JSON:
+{{
+    "questions": [
+        {{
+            "question_text": "Câu hỏi mới?",
+            "options": {{"A": "...", "B": "...", "C": "...", "D": "..."}},
+            "correct_answer": "A",
+            "explanation": "Giải thích"
+        }}
+    ]
+}}
+"""
+            
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": "You are an expert question generator. Return valid JSON only."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.7,
+                response_format={"type": "json_object"}
+            )
+            
+            result = json.loads(response.choices[0].message.content)
+            return result.get("questions", [])
+            
+        except Exception as e:
+            logger.error(f"❌ Generate questions error: {str(e)}")
+            return []
     
     def grade_essay(self, question: str, student_answer: str, correct_answer: str) -> dict:
-        # Code cũ giữ nguyên
-        pass
+        """
+        Chấm bài tự luận bằng AI
+        
+        Returns:
+            {
+                "score": 8.5,  # Điểm (0-10)
+                "feedback": "Nhận xét chi tiết...",
+                "strengths": ["Điểm mạnh 1", "Điểm mạnh 2"],
+                "improvements": ["Cần cải thiện 1", "Cần cải thiện 2"]
+            }
+        """
+        try:
+            logger.info(f"🤖 Grading essay answer...")
+            
+            prompt = f"""
+Chấm điểm câu trả lời tự luận sau:
+
+CÂU HỎI:
+{question}
+
+ĐÁP ÁN CHUẨN:
+{correct_answer}
+
+CÂU TRẢ LỜI CỦA HỌC SINH:
+{student_answer}
+
+YÊU CẦU:
+1. Chấm điểm từ 0-10
+2. Đưa ra nhận xét chi tiết
+3. Nêu điểm mạnh
+4. Nêu điểm cần cải thiện
+
+ĐỊNH DẠNG JSON:
+{{
+    "score": 8.5,
+    "feedback": "Nhận xét tổng quan về bài làm...",
+    "strengths": ["Điểm mạnh 1", "Điểm mạnh 2"],
+    "improvements": ["Cần cải thiện 1", "Cần cải thiện 2"]
+}}
+"""
+            
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[
+                    {"role": "system", "content": "You are an expert teacher. Grade fairly and provide constructive feedback. Return valid JSON only."},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.5,
+                response_format={"type": "json_object"}
+            )
+            
+            result = json.loads(response.choices[0].message.content)
+            logger.info(f"✅ Essay graded: {result['score']}/10")
+            return result
+            
+        except Exception as e:
+            logger.error(f"❌ Essay grading error: {str(e)}")
+            return {
+                "score": 0,
+                "feedback": "Không thể chấm điểm",
+                "strengths": [],
+                "improvements": []
+            }
 
 # Singleton instance
 chatgpt_service = ChatGPTService()
